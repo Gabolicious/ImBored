@@ -68,7 +68,7 @@ rhit.LoginPageController = class {
 		if (rhit.fbAuthManager.isSignedIn) window.location.href = "./index.html"
 
 		$("#createAccountModal").on("show.bs.modal", (e) => {
-			document.getElementById("create-email-field").value = document.getElementById("login-email.field").value;
+			document.getElementById("create-email-field").value = document.getElementById("login-email-field").value;
 		})
 
 		document.getElementById("login-button").onclick = (event) => {
