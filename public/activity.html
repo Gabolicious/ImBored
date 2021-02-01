@@ -14,7 +14,19 @@
 <body>
     <nav class="navbar navbar-light bg-light">
         <a class="navbar-brand" href="./"><strong>I'm Bored</strong></a>
-        <a class="btn btn-outline-info" type="button" id="login-button" href="login.html">Login/Sign Up</a>
+        <a class="btn btn-outline-info" type="button" id="login-button" href="login.html" style="display: none;">Login/Sign Up</a>
+
+        <div class="dropdown" id="profile-dropdown" style="display: none;">
+            <button class="btn btn-secondary dropdown-toggle" type="button" id="profile-name" data-toggle="dropdown"
+              aria-haspopup="true" aria-expanded="false">
+              Profile Name
+            </button>
+            <div class="dropdown-menu" aria-labelledby="profile-name">
+              <a class="dropdown-item" href="#">Create</a>
+              <a class="dropdown-item" href="./profile.html">Profile</a>
+              <a class="dropdown-item text-danger" id="logout-button">Log Out</a>
+            </div>
+          </div>
     </nav>
 
     <div id="activity-page" class="container">

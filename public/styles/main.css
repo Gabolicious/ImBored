@@ -11,6 +11,14 @@
     color: orange;
 }
 
+.dropdown-menu {
+    left: -75px;
+}
+
+.navbar {
+    min-height: 57px;
+}
+
 @media (min-width: 767.98px) {
     #select-group {
         width: 200px;

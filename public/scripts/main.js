@@ -7,9 +7,11 @@ rhit.FB_KEY_PARTICPANTS = "participants"
 rhit.FB_KEY_ACTIVITY = "activity"
 rhit.FB_KEY_AVAILABILITY = "availability"
 
+
 rhit.FbAuthManager = class {
 	constructor() {
 		this._user = null;
+		this.creatingAccount = false;
 	}
 	beginListening(changeListener) {
 		firebase.auth().onAuthStateChanged((user) => {
@@ -19,16 +21,20 @@ rhit.FbAuthManager = class {
 	}
 	createAccount(email, password, name) {
 		return new Promise((resolve, reject) => {
+			this.creatingAccount = true;
 			firebase.auth().createUserWithEmailAndPassword(email, password).then((userCredentials) => {
 				const user = userCredentials.user
 				user.updateProfile({
 					displayName: name
 				}).then(() => {
+					this.creatingAccount = false;
 					resolve()
 				}).catch((error) => {
+					this.creatingAccount = false;
 					reject(error)
 				});
 			}).catch((error) => {
+				this.creatingAccount = false;
 				reject(error)
 			});
 		})
@@ -48,11 +54,23 @@ rhit.FbAuthManager = class {
 	get uid() {
 		return this._user.uid
 	}
+	get name() {
+		return this._user.displayName
+	}
+}
+
+rhit.ProfilePageController = class {
+
 }
 
 rhit.LoginPageController = class {
 	constructor () {
 		if (rhit.fbAuthManager.isSignedIn) window.location.href = "./index.html"
+
+		$("#createAccountModal").on("show.bs.modal", (e) => {
+			document.getElementById("create-email-field").value = document.getElementById("login-email.field").value;
+		})
+
 		document.getElementById("login-button").onclick = (event) => {
 			const email = document.getElementById("login-email-field").value;
 			const password = document.getElementById("login-password-field").value;
@@ -158,6 +176,14 @@ rhit.ActivityPageController = class {
 	constructor() {
 		if (rhit.fbAuthManager.isSignedIn) {
 			document.getElementById("login-button").style.display = "none"
+			document.getElementById("profile-name").innerHTML = rhit.fbAuthManager.name;
+			document.getElementById("logout-button").onclick = (event) => {
+				rhit.fbAuthManager.signOut();
+			}
+			document.getElementById("profile-dropdown").style.display = ""
+		} else {
+			document.getElementById("profile-dropdown").style.display = "none"
+			document.getElementById("login-button").style.display = ""
 		}
 		rhit.fbActivityManager.beginListening(this.updateView.bind(this))
 	}
@@ -210,6 +236,14 @@ rhit.HomePageController = class {
 	constructor() {
 		if (rhit.fbAuthManager.isSignedIn) {
 			document.getElementById("login-button").style.display = "none"
+			document.getElementById("profile-name").innerHTML = rhit.fbAuthManager.name;
+			document.getElementById("logout-button").onclick = (event) => {
+				rhit.fbAuthManager.signOut();
+			}
+			document.getElementById("profile-dropdown").style.display = ""
+		} else {
+			document.getElementById("profile-dropdown").style.display = "none"
+			document.getElementById("login-button").style.display = ""
 		}
 		const validTypes = ["any", "education", "recreational", "social", "diy", "charity", "cooking", "relaxation", "music", "busywork"]
 		document.getElementById("activity-button").onclick = (event) => {
@@ -244,6 +278,7 @@ rhit.main = function () {
 	const urlParams = new URLSearchParams(window.location.search)
 	rhit.fbAuthManager = new rhit.FbAuthManager()
 	rhit.fbAuthManager.beginListening(() => {
+		if (rhit.fbAuthManager.creatingAccount) return;
 		console.log("isSignedIn = ", rhit.fbAuthManager.isSignedIn);
 		if (document.getElementById("home-page")) {
 			rhit.fbActivitiesManager = new rhit.FbActivitiesManager()
@@ -253,6 +288,8 @@ rhit.main = function () {
 			new rhit.ActivityPageController();
 		} else if (document.getElementById("login-page")) {
 			new rhit.LoginPageController();
+		} else if (document.getElementById("profile-page")) {
+			new rhit.ProfilePageController();
 		}
 	})
 };
