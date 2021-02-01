@@ -1,12 +1,9 @@
-body {
-    background: #DDDDDD;
+#select-group {
+    width: 55%;
 }
 
-.navbar {
-    background-color: #800000;
-    color: white;
-}
-
-.page-container {
-    margin-top: 75px;
+@media (min-width: 767.98px) {
+    #select-group {
+        width: 200px;
+    }
 }

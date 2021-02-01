@@ -7,21 +7,59 @@
   <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,400,500,700|Material+Icons">
   <link rel="stylesheet" href="styles/bootstrap-material-design.min.css">
   <link rel="stylesheet" href="styles/main.css">
-  <title>App Name</title>
+  <title>I'm Bored</title>
 </head>
 
 <body>
-  <nav class="navbar navbar-dark fixed-top">
-    <a class="navbar-brand" href="#">App Name</a>
+  <nav class="navbar navbar-light bg-light justify-content-end">
+    <a class="btn btn-outline-info" type="button" id="login-button" href="login.html">Login/Sign Up</a>
   </nav>
-  <div id="mainPage" class="container page-container">
+  <div id="home-page" class="container">
+    <div class="row justify-content-center">
+      <h1 class="display-2 text-center mt-4"><strong>I'm Bored</strong></h1>
+    </div>
+    <div class="row justify-content-center"> <button class="btn btn-raised btn-outline-primary" type="button"
+        id="activity-button">Find me an
+        activity</button>
+    </div>
 
-
+    <div class="row justify-content-center">
+      <div class="form-group" id="select-group">
+        <label for="type-select">Type:</label>
+        <select class="form-control" id="type-select">
+          <option selected value="any">Any</option>
+          <option value="education">Education</option>
+          <option value="recreational">Recreational</option>
+          <option value="social">Social</option>
+          <option value="diy">DIY</option>
+          <option value="charity">Charity</option>
+          <option value="cooking">Cooking</option>
+          <option value="relaxation">Relaxation</option>
+          <option value="music">Music</option>
+          <option value="busywork">Busywork</option>
+        </select>
+      </div>
+    </div>
+    <div class="row justify-content-center">
+      <div class="form-group">
+        <label for="price-slider">Price (low to high):</label>
+        <input type="range" class="form-range" id="price-slider" value="0" min="0" max="1" step="0.01">
+      </div>
+    </div>
+    <div class="row justify-content-center">
+      <div class="form-group">
+        <label for="participant-input">Participants:</label>
+        <input type="number" class="form-control" id="participant-input" value="1" min="1" step="1">
+      </div>
+    </div>
   </div>
+
   <script src="scripts/jquery.min.js"></script>
   <script src="scripts/popper.js"></script>
   <script src="scripts/bootstrap-material-design.js"></script>
-  <script>$("body").bootstrapMaterialDesign();</script>
+  <script>
+    $("body").bootstrapMaterialDesign();
+  </script>
   <script src="/__/firebase/7.18.0/firebase-app.js"></script>
   <script src="/__/firebase/7.18.0/firebase-analytics.js"></script>
   <script src="/__/firebase/7.18.0/firebase-auth.js"></script>
