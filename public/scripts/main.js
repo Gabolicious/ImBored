@@ -7,6 +7,105 @@ rhit.FB_KEY_PARTICPANTS = "participants"
 rhit.FB_KEY_ACTIVITY = "activity"
 rhit.FB_KEY_AVAILABILITY = "availability"
 
+rhit.FbAuthManager = class {
+	constructor() {
+		this._user = null;
+	}
+	beginListening(changeListener) {
+		firebase.auth().onAuthStateChanged((user) => {
+			this._user = user;
+			changeListener();
+		})
+	}
+	createAccount(email, password, name) {
+		return new Promise((resolve, reject) => {
+			firebase.auth().createUserWithEmailAndPassword(email, password).then((userCredentials) => {
+				const user = userCredentials.user
+				user.updateProfile({
+					displayName: name
+				}).then(() => {
+					resolve()
+				}).catch((error) => {
+					reject(error)
+				});
+			}).catch((error) => {
+				reject(error)
+			});
+		})
+		
+	}
+	signIn(email, password) {
+		console.log(`login for email: ${email} password: ${password}`);
+
+		return firebase.auth().signInWithEmailAndPassword(email, password);
+	}
+	signOut() {
+		return firebase.auth().signOut();
+	}
+	get isSignedIn() {
+		return !!this._user;
+	}
+	get uid() {
+		return this._user.uid
+	}
+}
+
+rhit.LoginPageController = class {
+	constructor () {
+		if (rhit.fbAuthManager.isSignedIn) window.location.href = "./index.html"
+		document.getElementById("login-button").onclick = (event) => {
+			const email = document.getElementById("login-email-field").value;
+			const password = document.getElementById("login-password-field").value;
+
+			if (!email) {
+				alert("Please enter an email")
+				return;
+			}
+			if (!password) {
+				alert("Please enter a password")
+				return;
+			}
+			rhit.fbAuthManager.signIn(email, password).catch((error) => {
+				const errorCode = error.code;
+				const errorMessage = error.message
+	
+				console.log("Existing account log in error", errorCode, errorMessage);
+			});
+		}
+
+		document.getElementById("create-account-button").onclick = (event) => {
+			const username = document.getElementById("create-username-field").value;
+			const email = document.getElementById("create-email-field").value;
+			const password1 = document.getElementById("create-password-field").value;
+			const password2 = document.getElementById("create-second-password-field").value;
+
+			if (password1 !== password2) {
+				alert("Passwords do not match!")
+				return;
+			}
+
+			if (!password1 || !password2) {
+				alert("A password is required")
+				return;
+			}
+
+			if (!email) {
+				alert("Please enter a valid email.")
+				return;
+			}
+
+			if (!username) {
+				alert("Please enter a valid username")
+				return;
+			}
+
+			rhit.fbAuthManager.createAccount(email, password1, username).catch((error) => {
+				console.log("error creating account", error);
+			})
+		}
+	}
+}
+
 rhit.FbActivityManager = class {
 	constructor(id) {
 		this._documentSnapshot = {};
@@ -51,6 +150,9 @@ rhit.FbActivityManager = class {
 
 rhit.ActivityPageController = class {
 	constructor() {
+		if (rhit.fbAuthManager.isSignedIn) {
+			document.getElementById("login-button").style.display = "none"
+		}
 		rhit.fbActivityManager.beginListening(this.updateView.bind(this))
 	}
 
@@ -100,6 +202,9 @@ rhit.FbActivitiesManager = class {
 
 rhit.HomePageController = class {
 	constructor() {
+		if (rhit.fbAuthManager.isSignedIn) {
+			document.getElementById("login-button").style.display = "none"
+		}
 		const validTypes = ["any", "education", "recreational", "social", "diy", "charity", "cooking", "relaxation", "music", "busywork"]
 		document.getElementById("activity-button").onclick = (event) => {
 			const type = document.getElementById("type-select").value.toLowerCase();
@@ -131,14 +236,19 @@ rhit.HomePageController = class {
 rhit.main = function () {
 	console.log("Ready");
 	const urlParams = new URLSearchParams(window.location.search)
-	if (document.getElementById("home-page")) {
-		rhit.fbActivitiesManager = new rhit.FbActivitiesManager()
-		new rhit.HomePageController();
-	} else if (document.getElementById("activity-page")) {
-		rhit.fbActivityManager = new rhit.FbActivityManager(urlParams.get("id"))
-		new rhit.ActivityPageController()
-	}
-
+	rhit.fbAuthManager = new rhit.FbAuthManager()
+	rhit.fbAuthManager.beginListening(() => {
+		console.log("isSignedIn = ", rhit.fbAuthManager.isSignedIn);
+		if (document.getElementById("home-page")) {
+			rhit.fbActivitiesManager = new rhit.FbActivitiesManager()
+			new rhit.HomePageController();
+		} else if (document.getElementById("activity-page")) {
+			rhit.fbActivityManager = new rhit.FbActivityManager(urlParams.get("id"))
+			new rhit.ActivityPageController();
+		} else if (document.getElementById("login-page")) {
+			new rhit.LoginPageController();
+		}
+	})
 };
 
 rhit.main();
