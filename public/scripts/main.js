@@ -65,11 +65,14 @@ rhit.LoginPageController = class {
 				alert("Please enter a password")
 				return;
 			}
-			rhit.fbAuthManager.signIn(email, password).catch((error) => {
+			rhit.fbAuthManager.signIn(email, password).then(() => {
+				window.location.href = "./index.html"
+			}).catch((error) => {
 				const errorCode = error.code;
 				const errorMessage = error.message
 	
 				console.log("Existing account log in error", errorCode, errorMessage);
+				alert("Unable to log you in. Is your username and password correct?")
 			});
 		}
 
@@ -99,8 +102,11 @@ rhit.LoginPageController = class {
 				return;
 			}
 
-			rhit.fbAuthManager.createAccount(email, password1, username).catch((error) => {
+			rhit.fbAuthManager.createAccount(email, password1, username).then(() => {
+				window.location.href = "./index.html"
+			}).catch((error) => {
 				console.log("error creating account", error);
+				alert("There was an error creating your account")
 			})
 		}
 	}
