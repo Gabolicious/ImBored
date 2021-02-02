@@ -205,7 +205,9 @@ rhit.ProfilePageController = class {
 				new rhit.FbActivityManager(rhit.fbProfileManager.historyIDAtIndex(i)).get().then((doc) => {
 					if (doc.exists) {
 						console.log(doc.data());
-						document.getElementById("history-container").appendChild(this._createHistoryCard(doc.data()))
+						const history = doc.data()
+						history.id = rhit.fbProfileManager.historyIDAtIndex(i)
+						document.getElementById("history-container").appendChild(this._createHistoryCard(history))
 					}
 				}).catch ((err) => {
 					console.error(err)
@@ -219,7 +221,7 @@ rhit.ProfilePageController = class {
 		return htmlToElement(`<div class="mb-4">
 		<div class="row ml-3">
 			<div class="col-7">
-				<p class="h4"><strong>${history.activity}</strong></p>
+				<a class="h4" href="/activity.html?id=${history.id}"><strong>${history.activity}</strong></a>
 			</div>
 			<!--
 			<div class="col-5 mt-1">
