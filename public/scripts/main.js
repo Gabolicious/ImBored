@@ -7,7 +7,6 @@ rhit.FB_KEY_PARTICPANTS = "participants"
 rhit.FB_KEY_ACTIVITY = "activity"
 rhit.FB_KEY_AVAILABILITY = "availability"
 
-
 rhit.FbAuthManager = class {
 	constructor() {
 		this._user = null;
@@ -19,9 +18,15 @@ rhit.FbAuthManager = class {
 			changeListener();
 		})
 	}
+	updateUsername(name) {
+		return this._user.updateProfile({
+			displayName: name
+		})
+	}
 	createAccount(email, password, name) {
 		return new Promise((resolve, reject) => {
 			this.creatingAccount = true;
+
 			firebase.auth().createUserWithEmailAndPassword(email, password).then((userCredentials) => {
 				const user = userCredentials.user
 				user.updateProfile({
@@ -38,7 +43,7 @@ rhit.FbAuthManager = class {
 				reject(error)
 			});
 		})
-		
+
 	}
 	signIn(email, password) {
 		console.log(`login for email: ${email} password: ${password}`);
@@ -47,6 +52,23 @@ rhit.FbAuthManager = class {
 	}
 	signOut() {
 		return firebase.auth().signOut();
+	}
+
+	deleteAccount(password) {
+		return new Promise((resolve, reject) => {
+			this._user.reauthenticateWithCredential(firebase.auth.EmailAuthProvider.credential(
+				this._user.email,
+				password
+			)).then(() => {
+				this._user.delete().then(() => {
+					resolve()
+				}).catch((err) => {
+					reject(err)
+				})
+			}).catch((err) => {
+				reject(err)
+			})
+		})
 	}
 	get isSignedIn() {
 		return !!this._user;
@@ -59,12 +81,61 @@ rhit.FbAuthManager = class {
 	}
 }
 
-rhit.ProfilePageController = class {
+rhit.FbProfileManager = class {
+	constructor(uid) {
+		this._uid = uid;
+	}
+}
 
+rhit.ProfilePageController = class {
+	constructor() {
+		document.getElementById("submit-new-name").onclick = (event) => {
+			const newName = document.getElementById("new-name-field").value;
+			if (!newName) {
+				alert("Please provide a valid new name")
+				return;
+			}
+
+			rhit.fbAuthManager.updateUsername(newName).then(() => {
+				this.updateView();
+			}).catch((err) => {
+				console.log("Error", err);
+				alert("Error changing username")
+			})
+		}
+
+		document.getElementById("delete-account-button").onclick = (event) => {
+			const pwd = document.getElementById("delete-password-field").value;
+			if (!pwd) {
+				alert("Please provide a password")
+				return;
+			}
+			rhit.fbAuthManager.deleteAccount(pwd).catch((err) => {
+				console.error(err)
+				alert("Error deleting your account!")
+			})
+		}
+
+		this.updateView();
+	}
+
+	updateView() {
+		if (rhit.fbAuthManager.isSignedIn) {
+			document.getElementById("profile-name").innerHTML = rhit.fbAuthManager.name;
+			document.getElementById("new-name-field").value = ""
+			document.getElementById("logout-button").onclick = (event) => {
+				rhit.fbAuthManager.signOut();
+			}
+			document.getElementById("profile-dropdown").style.display = ""
+		} else {
+			window.location.href = "./index.html"
+		}
+
+	}
 }
 
 rhit.LoginPageController = class {
-	constructor () {
+	constructor() {
 		if (rhit.fbAuthManager.isSignedIn) window.location.href = "./index.html"
 
 		$("#createAccountModal").on("show.bs.modal", (e) => {
@@ -88,7 +159,7 @@ rhit.LoginPageController = class {
 			}).catch((error) => {
 				const errorCode = error.code;
 				const errorMessage = error.message
-	
+
 				console.log("Existing account log in error", errorCode, errorMessage);
 				alert("Unable to log you in. Is your username and password correct?")
 			});
