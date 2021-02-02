@@ -1,23 +1,66 @@
 var rhit = rhit || {};
 
 rhit.FB_COLLECTION_ACTIVITIES = "activities";
+rhit.FB_COLLECTION_HISTORY = "historys"
+rhit.FB_KEY_HISTORY = "history"
 rhit.FB_KEY_TYPE = "type"
 rhit.FB_KEY_PRICE = "price"
 rhit.FB_KEY_PARTICPANTS = "participants"
 rhit.FB_KEY_ACTIVITY = "activity"
 rhit.FB_KEY_AVAILABILITY = "availability"
 
-rhit.FbAuthManager = class {
+rhit.fbProfileManager = null;
+// From: https://stackoverflow.com/questions/494143/creating-a-new-dom-element-from-an-html-string-using-built-in-dom-methods-or-pro/35385518#35385518
+/**
+ * @param {String} HTML representing a single element
+ * @return {Element}
+ */
+function htmlToElement(html) {
+    var template = document.createElement('template');
+    html = html.trim();
+    template.innerHTML = html;
+    return template.content.firstChild;
+};
+
+rhit.FbProfileManager = class {
 	constructor() {
 		this._user = null;
 		this.creatingAccount = false;
+		this._historySnapshot = null;
+		this._historyRef = null;
 	}
 	beginListening(changeListener) {
 		firebase.auth().onAuthStateChanged((user) => {
 			this._user = user;
+			if (this._user) {
+				this._historyRef = firebase.firestore().collection(rhit.FB_COLLECTION_HISTORY).doc(this._user.uid)
+				this._historyRef.get().then((docSnap) => {
+					if (!docSnap.exists) {
+						this._historyRef.set({
+							[rhit.FB_KEY_HISTORY]: []
+						}).catch((err) => {
+							console.log(err);
+							alert("Unable to instantiate the user.")
+						})
+					}
+				})
+			} else {
+				this._historyRef = null;
+			}
 			changeListener();
 		})
 	}
+
+	beginHistoryListening(changeListener) {
+		this._historyRef.onSnapshot((docSnapshot) => {
+			this._historySnapshot = docSnapshot.get(rhit.FB_KEY_HISTORY);
+
+			if (changeListener) {
+				changeListener();
+			}
+		})
+	}
+
 	updateUsername(name) {
 		return this._user.updateProfile({
 			displayName: name
@@ -70,6 +113,23 @@ rhit.FbAuthManager = class {
 			})
 		})
 	}
+
+	addToHistory(activityID) {
+		return new Promise((resolve, reject) => {
+			if (!this.isSignedIn) {
+				resolve();
+				return;
+			}
+			this._historyRef.update({
+				[rhit.FB_KEY_HISTORY]: firebase.firestore.FieldValue.arrayUnion(activityID)
+			}).then(() => {
+				resolve();
+			}).catch((err) => {
+				reject(err)
+			})
+		})
+	}
+
 	get isSignedIn() {
 		return !!this._user;
 	}
@@ -79,11 +139,16 @@ rhit.FbAuthManager = class {
 	get name() {
 		return this._user.displayName
 	}
-}
 
-rhit.FbProfileManager = class {
-	constructor(uid) {
-		this._uid = uid;
+	get historyLength() {
+		if (!this._historySnapshot) return 0
+		return this._historySnapshot.length;
+	}
+
+	historyIDAtIndex(index) {
+		const historyID = this._historySnapshot[index]
+		if (!historyID) throw new Error("Index out of bounds")
+		return historyID
 	}
 }
 
@@ -96,7 +161,7 @@ rhit.ProfilePageController = class {
 				return;
 			}
 
-			rhit.fbAuthManager.updateUsername(newName).then(() => {
+			rhit.fbProfileManager.updateUsername(newName).then(() => {
 				this.updateView();
 			}).catch((err) => {
 				console.log("Error", err);
@@ -110,33 +175,69 @@ rhit.ProfilePageController = class {
 				alert("Please provide a password")
 				return;
 			}
-			rhit.fbAuthManager.deleteAccount(pwd).catch((err) => {
+			rhit.fbProfileManager.deleteAccount(pwd).catch((err) => {
 				console.error(err)
 				alert("Error deleting your account!")
 			})
 		}
 
+		rhit.fbProfileManager.beginHistoryListening(this.updateView.bind(this))
+
 		this.updateView();
 	}
 
 	updateView() {
-		if (rhit.fbAuthManager.isSignedIn) {
-			document.getElementById("profile-name").innerHTML = rhit.fbAuthManager.name;
+		if (rhit.fbProfileManager.isSignedIn) {
+			document.getElementById("profile-name").innerHTML = rhit.fbProfileManager.name;
 			document.getElementById("new-name-field").value = ""
 			document.getElementById("logout-button").onclick = (event) => {
-				rhit.fbAuthManager.signOut();
+				rhit.fbProfileManager.signOut();
 			}
 			document.getElementById("profile-dropdown").style.display = ""
 		} else {
 			window.location.href = "./index.html"
 		}
 
+		if (rhit.fbProfileManager.historyLength < 1) {
+			document.getElementById("history-container").style.display = "none"
+		} else {
+			for (let i = 0; i < rhit.fbProfileManager.historyLength; i++) {
+				new rhit.FbActivityManager(rhit.fbProfileManager.historyIDAtIndex(i)).get().then((doc) => {
+					if (doc.exists) {
+						console.log(doc.data());
+						document.getElementById("history-container").appendChild(this._createHistoryCard(doc.data()))
+					}
+				}).catch ((err) => {
+					console.error(err)
+				})
+			}
+			document.getElementById("history-container").style.display = ""
+		}
+	}	
+
+	_createHistoryCard(history) {
+		return htmlToElement(`<div class="mb-4">
+		<div class="row ml-3">
+			<div class="col-7">
+				<p class="h4"><strong>${history.activity}</strong></p>
+			</div>
+			<!--
+			<div class="col-5 mt-1">
+				<span class="fa fa-star checked"></span>
+				<span class="fa fa-star checked"></span>
+				<span class="fa fa-star checked"></span>
+				<span class="fa fa-star"></span>
+				<span class="fa fa-star"></span>
+			</div>
+			-->
+		</div>
+	</div>`)
 	}
 }
 
 rhit.LoginPageController = class {
 	constructor() {
-		if (rhit.fbAuthManager.isSignedIn) window.location.href = "./index.html"
+		if (rhit.fbProfileManager.isSignedIn) window.location.href = "./index.html"
 
 		$("#createAccountModal").on("show.bs.modal", (e) => {
 			document.getElementById("create-email-field").value = document.getElementById("login-email-field").value;
@@ -154,7 +255,7 @@ rhit.LoginPageController = class {
 				alert("Please enter a password")
 				return;
 			}
-			rhit.fbAuthManager.signIn(email, password).then(() => {
+			rhit.fbProfileManager.signIn(email, password).then(() => {
 				window.location.href = "./index.html"
 			}).catch((error) => {
 				const errorCode = error.code;
@@ -191,7 +292,7 @@ rhit.LoginPageController = class {
 				return;
 			}
 
-			rhit.fbAuthManager.createAccount(email, password1, username).then(() => {
+			rhit.fbProfileManager.createAccount(email, password1, username).then(() => {
 				window.location.href = "./index.html"
 			}).catch((error) => {
 				console.log("error creating account", error);
@@ -218,6 +319,11 @@ rhit.FbActivityManager = class {
 			changeListener()
 		})
 	}
+
+	get() {
+		return this._ref.get()
+	}
+
 	stopListening() {
 		this._unsubscribe();
 	}
@@ -245,11 +351,11 @@ rhit.FbActivityManager = class {
 
 rhit.ActivityPageController = class {
 	constructor() {
-		if (rhit.fbAuthManager.isSignedIn) {
+		if (rhit.fbProfileManager.isSignedIn) {
 			document.getElementById("login-button").style.display = "none"
-			document.getElementById("profile-name").innerHTML = rhit.fbAuthManager.name;
+			document.getElementById("profile-name").innerHTML = rhit.fbProfileManager.name;
 			document.getElementById("logout-button").onclick = (event) => {
-				rhit.fbAuthManager.signOut();
+				rhit.fbProfileManager.signOut();
 			}
 			document.getElementById("profile-dropdown").style.display = ""
 		} else {
@@ -294,7 +400,13 @@ rhit.FbActivitiesManager = class {
 				if (possibleSnapshots.length < 1) {
 					reject("No activity could be found! Try a broader search")
 				}
-				resolve(possibleSnapshots[Math.floor(Math.random() * possibleSnapshots.length)])
+				const activityID = possibleSnapshots[Math.floor(Math.random() * possibleSnapshots.length)];
+				rhit.fbProfileManager.addToHistory(activityID).then(() => {
+					resolve(activityID)
+				}).catch((err) => {
+					console.log(err);
+					reject("Error adding activity to history!")
+				})
 			}).catch(function (error) {
 				console.log("Error with firestore ", error);
 				reject("Error getting an activity")
@@ -305,11 +417,11 @@ rhit.FbActivitiesManager = class {
 
 rhit.HomePageController = class {
 	constructor() {
-		if (rhit.fbAuthManager.isSignedIn) {
+		if (rhit.fbProfileManager.isSignedIn) {
 			document.getElementById("login-button").style.display = "none"
-			document.getElementById("profile-name").innerHTML = rhit.fbAuthManager.name;
+			document.getElementById("profile-name").innerHTML = rhit.fbProfileManager.name;
 			document.getElementById("logout-button").onclick = (event) => {
-				rhit.fbAuthManager.signOut();
+				rhit.fbProfileManager.signOut();
 			}
 			document.getElementById("profile-dropdown").style.display = ""
 		} else {
@@ -347,10 +459,10 @@ rhit.HomePageController = class {
 rhit.main = function () {
 	console.log("Ready");
 	const urlParams = new URLSearchParams(window.location.search)
-	rhit.fbAuthManager = new rhit.FbAuthManager()
-	rhit.fbAuthManager.beginListening(() => {
-		if (rhit.fbAuthManager.creatingAccount) return;
-		console.log("isSignedIn = ", rhit.fbAuthManager.isSignedIn);
+	rhit.fbProfileManager = new rhit.FbProfileManager()
+	rhit.fbProfileManager.beginListening(() => {
+		if (rhit.fbProfileManager.creatingAccount) return;
+		console.log("isSignedIn = ", rhit.fbProfileManager.isSignedIn);
 		if (document.getElementById("home-page")) {
 			rhit.fbActivitiesManager = new rhit.FbActivitiesManager()
 			new rhit.HomePageController();
