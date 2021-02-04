@@ -8,6 +8,8 @@ rhit.FB_KEY_PRICE = "price"
 rhit.FB_KEY_PARTICPANTS = "participants"
 rhit.FB_KEY_ACTIVITY = "activity"
 rhit.FB_KEY_AVAILABILITY = "availability"
+rhit.FB_KEY_AUTHOR = "author"
+rhit.validTypes = ["any", "education", "recreational", "social", "diy", "charity", "cooking", "relaxation", "music", "busywork"]
 
 rhit.fbProfileManager = null;
 // From: https://stackoverflow.com/questions/494143/creating-a-new-dom-element-from-an-html-string-using-built-in-dom-methods-or-pro/35385518#35385518
@@ -27,7 +29,9 @@ rhit.FbProfileManager = class {
 		this._user = null;
 		this.creatingAccount = false;
 		this._historySnapshot = null;
+		this._createdSnapshots = null;
 		this._historyRef = null;
+		this._activityRef = firebase.firestore().collection(rhit.FB_COLLECTION_ACTIVITIES);
 	}
 	beginListening(changeListener) {
 		firebase.auth().onAuthStateChanged((user) => {
@@ -48,6 +52,16 @@ rhit.FbProfileManager = class {
 				this._historyRef = null;
 			}
 			changeListener();
+		})
+	}
+
+	beginCreatedListening(changeListener) {
+		this._activityRef.where(rhit.FB_KEY_AUTHOR, "==", this.uid).onSnapshot((docSnapshots) => {
+			this._createdSnapshots = docSnapshots.docs;
+
+			if (changeListener) {
+				changeListener()
+			}
 		})
 	}
 
@@ -130,6 +144,26 @@ rhit.FbProfileManager = class {
 		})
 	}
 
+	createActivity(name, type, price, participants) {
+		return new Promise((resolve, reject) => {
+			if (!this.isSignedIn) {
+				reject("You are not signed in!")
+				return;
+			}
+			this._activityRef.add({
+				[rhit.FB_KEY_ACTIVITY]: name,
+				[rhit.FB_KEY_TYPE]: type,
+				[rhit.FB_KEY_PRICE]: price,
+				[rhit.FB_KEY_PARTICPANTS]: participants,
+				[rhit.FB_KEY_AUTHOR]: this.uid
+			}).then((docRef) => {
+				resolve(docRef)
+			}).catch((err) => {
+				reject(err)
+			})
+		})
+	}
+
 	get isSignedIn() {
 		return !!this._user;
 	}
@@ -140,15 +174,72 @@ rhit.FbProfileManager = class {
 		return this._user.displayName
 	}
 
+	get createdLength() {
+		if (!this._createdSnapshots) return 0;
+		return this._createdSnapshots.length;
+	}
+
+	createdIDAtIndex(index) {
+		const createdID = this._createdSnapshots[index];
+		if (!createdID) throw new Error("Index out of bounds")
+		return createdID.id
+	}
+
 	get historyLength() {
 		if (!this._historySnapshot) return 0
 		return this._historySnapshot.length;
 	}
 
 	historyIDAtIndex(index) {
-		const historyID = this._historySnapshot[index]
-		if (!historyID) throw new Error("Index out of bounds")
-		return historyID
+		const historyRef = this._historySnapshot[index]
+		if (!historyRef) throw new Error("Index out of bounds")
+		return historyRef
+	}
+}
+
+rhit.CreatePageController = class {
+	constructor() {
+		if (rhit.fbProfileManager.isSignedIn) {
+			document.getElementById("login-button").style.display = "none"
+			document.getElementById("profile-name").innerHTML = rhit.fbProfileManager.name;
+			document.getElementById("logout-button").onclick = (event) => {
+				rhit.fbProfileManager.signOut();
+			}
+			document.getElementById("profile-dropdown").style.display = ""
+		} else {
+			window.location.href = "./"
+		}
+
+		document.getElementById("create-button").onclick = (event) => {
+			const name = document.getElementById("new-activity-name-field").value;
+			const type = document.getElementById("type-select").value;
+			const price = parseFloat(document.getElementById("price-slider").value);
+			const participants = parseInt(document.getElementById("participant-input").value);
+
+			if (!name) {
+				alert("Please provide a name")
+				return;
+			}
+			if (!type || !rhit.validTypes.includes(type)) {
+				alert("Please provide a valid type")
+				return;
+			}
+			if (!price || price < 0 || price > 1) {
+				alert("Please provide a valid price")
+				return;
+			}
+			if (!participants || participants < 1) {
+				alert("Please provide a valid number of participants")
+				return;
+			}
+
+			rhit.fbProfileManager.createActivity(name, type, price, participants).then((docRef) => {
+				window.location.href = `./activity.html?id=${docRef.id}`
+			}).catch((err) => {
+				console.log("Error", err);
+				alert("There was an error creating the activity, are you signed in?")
+			})
+		}
 	}
 }
 
@@ -181,27 +272,22 @@ rhit.ProfilePageController = class {
 			})
 		}
 
-		rhit.fbProfileManager.beginHistoryListening(this.updateView.bind(this))
-
+		rhit.fbProfileManager.beginHistoryListening(this.updateHistory.bind(this))
+		rhit.fbProfileManager.beginCreatedListening(this.updateCreated.bind(this))
 		this.updateView();
 	}
 
-	updateView() {
-		if (rhit.fbProfileManager.isSignedIn) {
-			document.getElementById("profile-name").innerHTML = rhit.fbProfileManager.name;
-			document.getElementById("new-name-field").value = ""
-			document.getElementById("logout-button").onclick = (event) => {
-				rhit.fbProfileManager.signOut();
-			}
-			document.getElementById("profile-dropdown").style.display = ""
-		} else {
-			window.location.href = "./index.html"
-		}
-
+	updateHistory() {
 		if (rhit.fbProfileManager.historyLength < 1) {
 			document.getElementById("history-container").style.display = "none"
 		} else {
+			console.log("CLEARED");
+			document.getElementById("history-container").innerHTML = `<hr>
+            <div class="row ml-1">
+                <h2 class="mt-2"><strong>History:</strong></h2>
+            </div>`
 			for (let i = 0; i < rhit.fbProfileManager.historyLength; i++) {
+				console.log(i);
 				new rhit.FbActivityManager(rhit.fbProfileManager.historyIDAtIndex(i)).get().then((doc) => {
 					if (doc.exists) {
 						console.log(doc.data());
@@ -214,6 +300,42 @@ rhit.ProfilePageController = class {
 				})
 			}
 			document.getElementById("history-container").style.display = ""
+		}
+	}
+
+	updateCreated() {
+		if (rhit.fbProfileManager.createdLength < 1) {
+			document.getElementById("activities-container").style.display = "none"
+		} else {
+			document.getElementById("activities-container").innerHTML = `<hr>
+            <div class="row ml-1">
+                <h2 class="mt-2"><strong>Your Activities:</strong></h2>
+            </div>`
+			for (let i = 0; i < rhit.fbProfileManager.createdLength; i++) {
+				new rhit.FbActivityManager(rhit.fbProfileManager.createdIDAtIndex(i)).get().then((doc) => {
+					if (doc.exists) {
+						console.log(doc.data());
+						const created = doc.data();
+						created.id = rhit.fbProfileManager.createdIDAtIndex(i)
+						document.getElementById("activities-container").appendChild(this._createCreatedCard(created))
+					}
+				})
+			}
+			document.getElementById("activities-container").style.display = ""
+		}
+	}
+
+	updateView() {
+		console.log("UPDATE");
+		if (rhit.fbProfileManager.isSignedIn) {
+			document.getElementById("profile-name").innerHTML = rhit.fbProfileManager.name;
+			document.getElementById("new-name-field").value = ""
+			document.getElementById("logout-button").onclick = (event) => {
+				rhit.fbProfileManager.signOut();
+			}
+			document.getElementById("profile-dropdown").style.display = ""
+		} else {
+			window.location.href = "./index.html"
 		}
 	}	
 
@@ -232,6 +354,23 @@ rhit.ProfilePageController = class {
 				<span class="fa fa-star"></span>
 			</div>
 			-->
+		</div>
+	</div>`)
+	}
+
+	_createCreatedCard(created) {
+		return htmlToElement(`<div class="mb-4">
+		<div class="row ml-3">
+			<div class="col-7">
+				<a class="h4" href="./activity.html?id=${created.id}"><strong>${created.activity}</strong></a>
+			</div>
+			<!-- <div class="col-5 mt-1">
+				<span class="fa fa-star checked"></span>
+				<span class="fa fa-star checked"></span>
+				<span class="fa fa-star checked"></span>
+				<span class="fa fa-star"></span>
+				<span class="fa fa-star"></span>
+			</div> -->
 		</div>
 	</div>`)
 	}
@@ -430,7 +569,6 @@ rhit.HomePageController = class {
 			document.getElementById("profile-dropdown").style.display = "none"
 			document.getElementById("login-button").style.display = ""
 		}
-		const validTypes = ["any", "education", "recreational", "social", "diy", "charity", "cooking", "relaxation", "music", "busywork"]
 		document.getElementById("activity-button").onclick = (event) => {
 			const type = document.getElementById("type-select").value.toLowerCase();
 			const price = parseFloat(document.getElementById("price-slider").value);
@@ -444,7 +582,7 @@ rhit.HomePageController = class {
 				alert("Please select a valid price")
 				return;
 			}
-			if (!validTypes.includes(type)) {
+			if (!rhit.validTypes.includes(type)) {
 				alert("Please select a valid type")
 				return;
 			}
@@ -475,6 +613,8 @@ rhit.main = function () {
 			new rhit.LoginPageController();
 		} else if (document.getElementById("profile-page")) {
 			new rhit.ProfilePageController();
+		} else if (document.getElementById("create-page")) {
+			new rhit.CreatePageController();
 		}
 	})
 };

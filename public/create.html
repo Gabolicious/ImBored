@@ -11,7 +11,9 @@
 </head>
 
 <body>
-  <nav class="navbar navbar-light bg-light justify-content-end">
+  <nav class="navbar navbar-light bg-light">
+    <a class="navbar-brand" href="./"><strong>I'm Bored</strong></a>
+
     <a class="btn btn-outline-info" type="button" id="login-button" href="login.html" style="display: none;">Login/Sign Up</a>
 
 
@@ -27,20 +29,17 @@
       </div>
     </div>
   </nav>
-  <div id="home-page" class="container">
+  <div id="create-page" class="container">
     <div class="row justify-content-center">
-      <h1 class="display-2 text-center mt-4"><strong>I'm Bored</strong></h1>
+      <h1 class="text-center mt-2"><strong>Create Activity</strong></h1>
     </div>
-    <div class="row justify-content-center"> <button class="btn btn-raised btn-outline-primary" type="button"
-        id="activity-button">Find me an
-        activity</button>
+    <div class="row justify-content-center">
+      <input type="text" class="form-control" id="new-activity-name-field" placeholder="Activity Name" required>
     </div>
-
     <div class="row justify-content-center">
       <div class="form-group" id="select-group">
         <label for="type-select">Type:</label>
         <select class="form-control" id="type-select">
-          <option selected value="any">Any</option>
           <option value="education">Education</option>
           <option value="recreational">Recreational</option>
           <option value="social">Social</option>
@@ -64,6 +63,9 @@
         <label for="participant-input">Participants:</label>
         <input type="number" class="form-control" id="participant-input" value="1" min="1" step="1">
       </div>
+    </div>
+    <div class="row justify-content-center">
+      <button class="btn btn-outline-primary mt-4" type="button" id="create-button">Create Activity</button>
     </div>
   </div>
 

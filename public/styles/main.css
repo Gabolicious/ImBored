@@ -20,7 +20,7 @@
 }
 
 @media (min-width: 767.98px) {
-    #select-group {
+    #select-group, #new-activity-name-field {
         width: 200px;
     }
 }
