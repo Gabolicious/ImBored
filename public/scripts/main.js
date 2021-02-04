@@ -1,7 +1,9 @@
 var rhit = rhit || {};
 
-rhit.FB_COLLECTION_ACTIVITIES = "activities";
+rhit.FB_COLLECTION_ACTIVITIES = "activities"
 rhit.FB_COLLECTION_HISTORY = "historys"
+rhit.FB_COLLECTION_REVIEWS = "reviews"
+rhit.FB_COLLECTION_USERS = "users"
 rhit.FB_KEY_HISTORY = "history"
 rhit.FB_KEY_TYPE = "type"
 rhit.FB_KEY_PRICE = "price"
@@ -9,6 +11,12 @@ rhit.FB_KEY_PARTICPANTS = "participants"
 rhit.FB_KEY_ACTIVITY = "activity"
 rhit.FB_KEY_AVAILABILITY = "availability"
 rhit.FB_KEY_AUTHOR = "author"
+rhit.FB_KEY_REVIEW_ACTIVITY = "activity"
+rhit.FB_KEY_REVIEW_AUTHOR = "author"
+rhit.FB_KEY_REVIEW_TEXT = "text"
+rhit.FB_KEY_REVIEW_VALUE = "value"
+rhit.FB_KEY_NAME = "name"
+
 rhit.validTypes = ["any", "education", "recreational", "social", "diy", "charity", "cooking", "relaxation", "music", "busywork"]
 
 rhit.fbProfileManager = null;
@@ -27,17 +35,21 @@ function htmlToElement(html) {
 rhit.FbProfileManager = class {
 	constructor() {
 		this._user = null;
-		this.creatingAccount = false;
 		this._historySnapshot = null;
 		this._createdSnapshots = null;
 		this._historyRef = null;
 		this._activityRef = firebase.firestore().collection(rhit.FB_COLLECTION_ACTIVITIES);
+		this.displayName = null;
+		this._userRef = null;
+		this.creatingAccount = false;
 	}
 	beginListening(changeListener) {
 		firebase.auth().onAuthStateChanged((user) => {
 			this._user = user;
 			if (this._user) {
 				this._historyRef = firebase.firestore().collection(rhit.FB_COLLECTION_HISTORY).doc(this._user.uid)
+				let gotHistory = false;
+				let gotName = false;
 				this._historyRef.get().then((docSnap) => {
 					if (!docSnap.exists) {
 						this._historyRef.set({
@@ -47,11 +59,24 @@ rhit.FbProfileManager = class {
 							alert("Unable to instantiate the user.")
 						})
 					}
+					gotHistory = true;
+					if (gotName) {
+						changeListener()
+					}
+				})
+				this._userRef = firebase.firestore().collection(rhit.FB_COLLECTION_USERS).doc(this._user.uid);
+				this._userRef.get().then((docSnap) => {
+					this.displayName = docSnap.get(rhit.FB_KEY_NAME)
+					gotName = true;
+					if (gotHistory) {
+						changeListener()
+					}
 				})
 			} else {
 				this._historyRef = null;
+				this._userRef = null;
+				changeListener();
 			}
-			changeListener();
 		})
 	}
 
@@ -76,24 +101,25 @@ rhit.FbProfileManager = class {
 	}
 
 	updateUsername(name) {
-		return this._user.updateProfile({
-			displayName: name
+		return this._userRef.set({
+			[rhit.FB_KEY_NAME]: name
 		})
 	}
 	createAccount(email, password, name) {
 		return new Promise((resolve, reject) => {
 			this.creatingAccount = true;
-
 			firebase.auth().createUserWithEmailAndPassword(email, password).then((userCredentials) => {
 				const user = userCredentials.user
-				user.updateProfile({
-					displayName: name
+				firebase.firestore().collection(rhit.FB_COLLECTION_USERS).doc(user.uid).set({
+					[rhit.FB_KEY_NAME]: name
 				}).then(() => {
+					this._userRef = firebase.firestore().collection(rhit.FB_COLLECTION_USERS).doc(user.uid);
+					this.displayName = name;
 					this.creatingAccount = false;
 					resolve()
-				}).catch((error) => {
+				}).catch((err) => {
 					this.creatingAccount = false;
-					reject(error)
+					reject(err)
 				});
 			}).catch((error) => {
 				this.creatingAccount = false;
@@ -171,7 +197,7 @@ rhit.FbProfileManager = class {
 		return this._user.uid
 	}
 	get name() {
-		return this._user.displayName
+		return this.displayName
 	}
 
 	get createdLength() {
@@ -194,6 +220,90 @@ rhit.FbProfileManager = class {
 		const historyRef = this._historySnapshot[index]
 		if (!historyRef) throw new Error("Index out of bounds")
 		return historyRef
+	}
+}
+
+rhit.ReviewPageController = class {
+	constructor(uid) {
+		if (!uid) {
+			window.location.href = "./index.html"
+			return;
+		}
+		this._activity = new rhit.FbActivityManager(uid);
+		this.reviewValue = 5;
+		document.getElementById("1-star").onclick = () => {
+			this._updateReviewStars(1)
+		}
+		document.getElementById("2-star").onclick = () => {
+			this._updateReviewStars(2)
+		}
+		document.getElementById("3-star").onclick = () => {
+			this._updateReviewStars(3)
+		}
+		document.getElementById("4-star").onclick = () => {
+			this._updateReviewStars(4)
+		}
+		document.getElementById("5-star").onclick = () => {
+			this._updateReviewStars(5)
+		}
+
+		document.getElementById("submit-button").onclick = () => {
+			const reviewText = document.getElementById("review-text").value || "";
+			reviewText.replace(/\r?\n|\r/g, "")
+
+			if (!this.reviewValue || this.reviewValue < 1 || this.reviewValue > 5) {
+				alert("Please provide a valid rating")
+				return;
+			}
+
+			this._activity.addReview(this.reviewValue, reviewText).then((reviewRef) => {
+				window.location.href = `./activity.html?id=${this._activity.id}`
+			}).catch((err) => {
+				console.log("Error", err);
+				alert("There was an error adding the review!")
+			})
+		}
+
+		this._activity.beginListening(this.updateView.bind(this))
+	}
+
+	updateView() {
+		this._activity.hasUserReviewed().then((reviewed) => {
+			if (reviewed) {
+				window.location.href = "./index.html"
+			}
+		}).catch((err) => {
+			console.log("error", err);
+		})
+		document.getElementById("review-title").innerHTML = this._activity.activity
+	}
+
+	_updateReviewStars(val) {
+		this.reviewValue = val;
+		const oneStar = document.getElementById("1-star")
+		const twoStar = document.getElementById("2-star")
+		const threeStar = document.getElementById("3-star")
+		const fourStar = document.getElementById("4-star")
+		const fiveStar = document.getElementById("5-star")
+		oneStar.classList.remove("checked")
+		twoStar.classList.remove("checked")
+		threeStar.classList.remove("checked")
+		fourStar.classList.remove("checked")
+		fiveStar.classList.remove("checked")
+
+		switch (val) {
+			case 5:
+				fiveStar.classList.add("checked")
+			case 4:
+				fourStar.classList.add("checked")
+			case 3:
+				threeStar.classList.add("checked")
+			case 2:
+				twoStar.classList.add("checked")
+			case 1:
+				oneStar.classList.add("checked")
+
+		}
 	}
 }
 
@@ -443,11 +553,59 @@ rhit.LoginPageController = class {
 	}
 }
 
+rhit.FbReviewManager = class {
+	constructor(reviewID) {
+		this._review = {}
+		this._reviewRef = firebase.firestore().collection(rhit.FB_COLLECTION_REVIEWS).doc(reviewID)
+	}
+	get() {
+		return new Promise((resolve, reject) => {
+			this._reviewRef.get().then((reviewDoc) => {
+				this._review.value = reviewDoc.get(rhit.FB_KEY_REVIEW_VALUE)
+				this._review.text = reviewDoc.get(rhit.FB_KEY_REVIEW_TEXT)
+				
+				firebase.firestore().collection(rhit.FB_COLLECTION_ACTIVITIES).doc(reviewDoc.get(rhit.FB_KEY_REVIEW_ACTIVITY)).get().then((activityDoc) => {
+					this._review.activitySnapshot = activityDoc
+					firebase.firestore().collection(rhit.FB_COLLECTION_USERS).doc(reviewDoc.get(rhit.FB_KEY_REVIEW_AUTHOR)).get().then((authorDoc) => {
+						this._review.author = authorDoc.get(rhit.FB_KEY_NAME)
+						resolve()
+					}).catch((error) => {
+						reject(error)
+					})
+				}).catch((er) => {
+					reject(er)
+				})
+			}).catch((err) => {
+				console.log(err);
+				reject(err)
+			})
+		})
+	}
+
+	get author() {
+		return this._review.author
+	}
+	get stars() {
+		return this._review.value;
+	}
+	get text() {
+		return this._review.text
+	}
+	get activity() {
+		return this._review.activitySnapshot.get(rhit.FB_KEY_ACTIVITY)
+	}
+	get activityID() {
+		return this._review.activitySnapshot.id
+	}
+}
+
 rhit.FbActivityManager = class {
 	constructor(id) {
 		this._documentSnapshot = {};
+		this._reviews = []
 		this._unsubscribe = null;
 		this._ref = firebase.firestore().collection(rhit.FB_COLLECTION_ACTIVITIES).doc(id)
+		this._reviewRef = firebase.firestore().collection(rhit.FB_COLLECTION_REVIEWS)
 	}
 	beginListening(changeListener) {
 		this._unsubscribe = this._ref.onSnapshot((doc) => {
@@ -460,6 +618,12 @@ rhit.FbActivityManager = class {
 			changeListener()
 		})
 	}
+	beginReviewsListening(changeListener) {
+		this._reviewRef.where(rhit.FB_KEY_REVIEW_ACTIVITY, "==", this.id).onSnapshot((reviews) => {
+			this._reviews = reviews.docs;
+			changeListener();
+		})
+	}
 
 	get() {
 		return this._ref.get()
@@ -467,6 +631,26 @@ rhit.FbActivityManager = class {
 
 	stopListening() {
 		this._unsubscribe();
+	}
+
+	addReview(value, text) {
+		return this._reviewRef.add({
+			[rhit.FB_KEY_REVIEW_ACTIVITY]: this.id,
+			[rhit.FB_KEY_REVIEW_AUTHOR]: rhit.fbProfileManager.uid,
+			[rhit.FB_KEY_REVIEW_TEXT]: text,
+			[rhit.FB_KEY_REVIEW_VALUE]: value
+		})
+	}
+
+	hasUserReviewed() {
+		return new Promise((resolve, reject) => {
+			this._reviewRef.where(rhit.FB_KEY_REVIEW_ACTIVITY, "==", this.id).where(rhit.FB_KEY_REVIEW_AUTHOR, "==", rhit.fbProfileManager.uid).get().then((docSnapshots) => {
+				resolve(docSnapshots.docs.length >= 1)
+			}).catch((err) => {
+				reject(err)
+			})
+		})
+		
 	}
 
 	get activity() {
@@ -487,6 +671,20 @@ rhit.FbActivityManager = class {
 
 	get availability() {
 		return this._documentSnapshot.get(rhit.FB_KEY_AVAILABILITY)
+	}
+
+	get id() {
+		return this._documentSnapshot.id
+	}
+
+	get numReviews() {
+		return this._reviews.length;
+	}
+
+	getReviewIDAtIndex(index) {
+		const review = this._reviews[index]
+		if (!review) throw new Error("Index out of range")
+		return review.id;
 	}
 }
 
@@ -615,6 +813,8 @@ rhit.main = function () {
 			new rhit.ProfilePageController();
 		} else if (document.getElementById("create-page")) {
 			new rhit.CreatePageController();
+		} else if (document.getElementById("review-page")) {
+			new rhit.ReviewPageController(urlParams.get("id"));
 		}
 	})
 };
