@@ -37,11 +37,13 @@ rhit.FbProfileManager = class {
 		this._user = null;
 		this._historySnapshot = null;
 		this._createdSnapshots = null;
+		this._reviewSnapshots = null;
 		this._historyRef = null;
 		this._activityRef = firebase.firestore().collection(rhit.FB_COLLECTION_ACTIVITIES);
 		this.displayName = null;
 		this._userRef = null;
 		this.creatingAccount = false;
+		this._reviewRef = firebase.firestore().collection(rhit.FB_COLLECTION_REVIEWS)
 	}
 	beginListening(changeListener) {
 		firebase.auth().onAuthStateChanged((user) => {
@@ -96,6 +98,16 @@ rhit.FbProfileManager = class {
 
 			if (changeListener) {
 				changeListener();
+			}
+		})
+	}
+
+	beginReviewListening(changeListener) {
+		this._reviewRef.where(rhit.FB_KEY_REVIEW_AUTHOR, "==", this.uid).onSnapshot((docSnapshots) => {
+			this._reviewSnapshots = docSnapshots.docs;
+
+			if (changeListener) {
+				changeListener()
 			}
 		})
 	}
@@ -220,6 +232,17 @@ rhit.FbProfileManager = class {
 		const historyRef = this._historySnapshot[index]
 		if (!historyRef) throw new Error("Index out of bounds")
 		return historyRef
+	}
+
+	get reviewLength() {
+		if (!this._reviewSnapshots) return 0;
+		return this._reviewSnapshots.length;
+	}
+
+	reviewIDAtIndex(index) {
+		const reviewID = this._reviewSnapshots[index]
+		if (!reviewID) throw new Error("Index out of bounds")
+		return reviewID.id
 	}
 }
 
@@ -384,20 +407,38 @@ rhit.ProfilePageController = class {
 
 		rhit.fbProfileManager.beginHistoryListening(this.updateHistory.bind(this))
 		rhit.fbProfileManager.beginCreatedListening(this.updateCreated.bind(this))
+		rhit.fbProfileManager.beginReviewListening(this.updateReviews.bind(this))
 		this.updateView();
+	}
+
+	updateReviews() {
+		if (rhit.fbProfileManager.reviewLength < 1) {
+			document.getElementById("reviews-container").style.display = "none"
+		} else {
+			document.getElementById("reviews-container").innerHTML = `<hr>
+            <div class="row ml-1">
+                <h2 class="mt-2"><strong>Reviews:</strong></h2>
+            </div>`
+			for (let i = 0; i < rhit.fbProfileManager.reviewLength; i++) {
+				new rhit.FbReviewManager(rhit.fbProfileManager.reviewIDAtIndex(i)).get().then((review) => {
+					document.getElementById("reviews-container").appendChild(this._createReviewCard(review))
+				}).catch ((err) => {
+					console.error(err)
+				})
+			}
+			document.getElementById("reviews-container").style.display = ""
+		}
 	}
 
 	updateHistory() {
 		if (rhit.fbProfileManager.historyLength < 1) {
 			document.getElementById("history-container").style.display = "none"
 		} else {
-			console.log("CLEARED");
 			document.getElementById("history-container").innerHTML = `<hr>
             <div class="row ml-1">
                 <h2 class="mt-2"><strong>History:</strong></h2>
             </div>`
 			for (let i = 0; i < rhit.fbProfileManager.historyLength; i++) {
-				console.log(i);
 				new rhit.FbActivityManager(rhit.fbProfileManager.historyIDAtIndex(i)).get().then((doc) => {
 					if (doc.exists) {
 						console.log(doc.data());
@@ -436,7 +477,6 @@ rhit.ProfilePageController = class {
 	}
 
 	updateView() {
-		console.log("UPDATE");
 		if (rhit.fbProfileManager.isSignedIn) {
 			document.getElementById("profile-name").innerHTML = rhit.fbProfileManager.name;
 			document.getElementById("new-name-field").value = ""
@@ -481,6 +521,26 @@ rhit.ProfilePageController = class {
 				<span class="fa fa-star"></span>
 				<span class="fa fa-star"></span>
 			</div> -->
+		</div>
+	</div>`)
+	}
+
+	_createReviewCard(review) {
+		return htmlToElement(`<div class="mb-4">
+		<div class="row ml-3">
+			<div class="col-7">
+				<a class="h4" href="./activity.html?id=${review.activityID}"><strong>${review.activity}</strong></a>
+			</div>
+			<div class="col-5 mt-1">
+				<span class="fa fa-star ${review.stars >= 1 ? "checked" : ""}"></span>
+				<span class="fa fa-star ${review.stars >= 2 ? "checked" : ""}"></span>
+				<span class="fa fa-star ${review.stars >= 3 ? "checked" : ""}"></span>
+				<span class="fa fa-star ${review.stars >= 4 ? "checked" : ""}"></span>
+				<span class="fa fa-star ${review.stars >= 5 ? "checked" : ""}"></span>
+			</div>
+		</div>
+		<div class="row">
+			<p class="ml-5">${review.text}</p>
 		</div>
 	</div>`)
 	}
@@ -568,7 +628,7 @@ rhit.FbReviewManager = class {
 					this._review.activitySnapshot = activityDoc
 					firebase.firestore().collection(rhit.FB_COLLECTION_USERS).doc(reviewDoc.get(rhit.FB_KEY_REVIEW_AUTHOR)).get().then((authorDoc) => {
 						this._review.author = authorDoc.get(rhit.FB_KEY_NAME)
-						resolve()
+						resolve({author: this.author, stars: this.stars, text: this.text, activity: this.activity, activityID: this.activityID})
 					}).catch((error) => {
 						reject(error)
 					})
@@ -685,6 +745,14 @@ rhit.FbActivityManager = class {
 		const review = this._reviews[index]
 		if (!review) throw new Error("Index out of range")
 		return review.id;
+	}
+
+	get rating() {
+		let rating = 0;
+		this._reviews.forEach(review => {
+			rating += review.get(rhit.FB_KEY_REVIEW_VALUE)
+		});
+		return rating / this.numReviews
 	}
 }
 
