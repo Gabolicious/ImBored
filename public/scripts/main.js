@@ -26,10 +26,10 @@ rhit.fbProfileManager = null;
  * @return {Element}
  */
 function htmlToElement(html) {
-    var template = document.createElement('template');
-    html = html.trim();
-    template.innerHTML = html;
-    return template.content.firstChild;
+	var template = document.createElement('template');
+	html = html.trim();
+	template.innerHTML = html;
+	return template.content.firstChild;
 };
 
 rhit.FbProfileManager = class {
@@ -422,7 +422,7 @@ rhit.ProfilePageController = class {
 			for (let i = 0; i < rhit.fbProfileManager.reviewLength; i++) {
 				new rhit.FbReviewManager(rhit.fbProfileManager.reviewIDAtIndex(i)).get().then((review) => {
 					document.getElementById("reviews-container").appendChild(this._createReviewCard(review))
-				}).catch ((err) => {
+				}).catch((err) => {
 					console.error(err)
 				})
 			}
@@ -439,14 +439,12 @@ rhit.ProfilePageController = class {
                 <h2 class="mt-2"><strong>History:</strong></h2>
             </div>`
 			for (let i = 0; i < rhit.fbProfileManager.historyLength; i++) {
-				new rhit.FbActivityManager(rhit.fbProfileManager.historyIDAtIndex(i)).get().then((doc) => {
-					if (doc.exists) {
-						console.log(doc.data());
-						const history = doc.data()
-						history.id = rhit.fbProfileManager.historyIDAtIndex(i)
-						document.getElementById("history-container").appendChild(this._createHistoryCard(history))
-					}
-				}).catch ((err) => {
+				new rhit.FbActivityManager(rhit.fbProfileManager.historyIDAtIndex(i)).get().then((history) => {
+					console.log(history);
+					history.id = rhit.fbProfileManager.historyIDAtIndex(i)
+					document.getElementById("history-container").appendChild(this._createHistoryCard(history))
+
+				}).catch((err) => {
 					console.error(err)
 				})
 			}
@@ -463,13 +461,11 @@ rhit.ProfilePageController = class {
                 <h2 class="mt-2"><strong>Your Activities:</strong></h2>
             </div>`
 			for (let i = 0; i < rhit.fbProfileManager.createdLength; i++) {
-				new rhit.FbActivityManager(rhit.fbProfileManager.createdIDAtIndex(i)).get().then((doc) => {
-					if (doc.exists) {
-						console.log(doc.data());
-						const created = doc.data();
-						created.id = rhit.fbProfileManager.createdIDAtIndex(i)
-						document.getElementById("activities-container").appendChild(this._createCreatedCard(created))
-					}
+				new rhit.FbActivityManager(rhit.fbProfileManager.createdIDAtIndex(i)).get().then((created) => {
+					console.log(created);
+					created.id = rhit.fbProfileManager.createdIDAtIndex(i)
+					document.getElementById("activities-container").appendChild(this._createCreatedCard(created))
+
 				})
 			}
 			document.getElementById("activities-container").style.display = ""
@@ -487,7 +483,7 @@ rhit.ProfilePageController = class {
 		} else {
 			window.location.href = "./index.html"
 		}
-	}	
+	}
 
 	_createHistoryCard(history) {
 		return htmlToElement(`<div class="mb-4">
@@ -495,15 +491,13 @@ rhit.ProfilePageController = class {
 			<div class="col-7">
 				<a class="h4" href="/activity.html?id=${history.id}"><strong>${history.activity}</strong></a>
 			</div>
-			<!--
 			<div class="col-5 mt-1">
-				<span class="fa fa-star checked"></span>
-				<span class="fa fa-star checked"></span>
-				<span class="fa fa-star checked"></span>
-				<span class="fa fa-star"></span>
-				<span class="fa fa-star"></span>
+				<span class="fa fa-star ${history.rating >= 1 ? "checked" : ""}"></span>
+				<span class="fa fa-star ${history.rating >= 2 ? "checked" : ""}"></span>
+				<span class="fa fa-star ${history.rating >= 3 ? "checked" : ""}"></span>
+				<span class="fa fa-star ${history.rating >= 4 ? "checked" : ""}"></span>
+				<span class="fa fa-star ${history.rating >= 5 ? "checked" : ""}"></span>
 			</div>
-			-->
 		</div>
 	</div>`)
 	}
@@ -514,13 +508,13 @@ rhit.ProfilePageController = class {
 			<div class="col-7">
 				<a class="h4" href="./activity.html?id=${created.id}"><strong>${created.activity}</strong></a>
 			</div>
-			<!-- <div class="col-5 mt-1">
-				<span class="fa fa-star checked"></span>
-				<span class="fa fa-star checked"></span>
-				<span class="fa fa-star checked"></span>
-				<span class="fa fa-star"></span>
-				<span class="fa fa-star"></span>
-			</div> -->
+			<div class="col-5 mt-1">
+				<span class="fa fa-star ${created.rating >= 1 ? "checked" : ""}"></span>
+				<span class="fa fa-star ${created.rating >= 1 ? "checked" : ""}"></span>
+				<span class="fa fa-star ${created.rating >= 1 ? "checked" : ""}"></span>
+				<span class="fa fa-star ${created.rating >= 1 ? "checked" : ""}"></span>
+				<span class="fa fa-star ${created.rating >= 1 ? "checked" : ""}"></span>
+			</div>
 		</div>
 	</div>`)
 	}
@@ -623,12 +617,18 @@ rhit.FbReviewManager = class {
 			this._reviewRef.get().then((reviewDoc) => {
 				this._review.value = reviewDoc.get(rhit.FB_KEY_REVIEW_VALUE)
 				this._review.text = reviewDoc.get(rhit.FB_KEY_REVIEW_TEXT)
-				
+
 				firebase.firestore().collection(rhit.FB_COLLECTION_ACTIVITIES).doc(reviewDoc.get(rhit.FB_KEY_REVIEW_ACTIVITY)).get().then((activityDoc) => {
 					this._review.activitySnapshot = activityDoc
 					firebase.firestore().collection(rhit.FB_COLLECTION_USERS).doc(reviewDoc.get(rhit.FB_KEY_REVIEW_AUTHOR)).get().then((authorDoc) => {
 						this._review.author = authorDoc.get(rhit.FB_KEY_NAME)
-						resolve({author: this.author, stars: this.stars, text: this.text, activity: this.activity, activityID: this.activityID})
+						resolve({
+							author: this.author,
+							stars: this.stars,
+							text: this.text,
+							activity: this.activity,
+							activityID: this.activityID
+						})
 					}).catch((error) => {
 						reject(error)
 					})
@@ -665,7 +665,7 @@ rhit.FbActivityManager = class {
 		this._reviews = []
 		this._unsubscribe = null;
 		this._ref = firebase.firestore().collection(rhit.FB_COLLECTION_ACTIVITIES).doc(id)
-		this._reviewRef = firebase.firestore().collection(rhit.FB_COLLECTION_REVIEWS)
+		this._reviewRef = firebase.firestore().collection(rhit.FB_COLLECTION_REVIEWS).where(rhit.FB_KEY_REVIEW_ACTIVITY, "==", id)
 	}
 	beginListening(changeListener) {
 		this._unsubscribe = this._ref.onSnapshot((doc) => {
@@ -679,14 +679,34 @@ rhit.FbActivityManager = class {
 		})
 	}
 	beginReviewsListening(changeListener) {
-		this._reviewRef.where(rhit.FB_KEY_REVIEW_ACTIVITY, "==", this.id).onSnapshot((reviews) => {
+		this._reviewRef.onSnapshot((reviews) => {
 			this._reviews = reviews.docs;
 			changeListener();
 		})
 	}
 
 	get() {
-		return this._ref.get()
+		return new Promise((resolve, reject) => {
+			this._ref.get().then((doc) => {
+				const activity = doc.data();
+				this._reviewRef.get().then((reviews) => {
+					activity.numReviews = reviews.docs.length
+					activity.rating = 0
+					if (activity.numReviews > 0) {
+						reviews.docs.forEach(review => {
+							activity.rating += review.get(rhit.FB_KEY_REVIEW_VALUE)
+						});
+						activity.rating /= activity.numReviews
+					}
+				
+					resolve(activity)
+				}).catch((err) => {
+					reject(err)
+				})
+			}).catch((err) => {
+				reject(err)
+			})
+		})
 	}
 
 	stopListening() {
@@ -704,13 +724,13 @@ rhit.FbActivityManager = class {
 
 	hasUserReviewed() {
 		return new Promise((resolve, reject) => {
-			this._reviewRef.where(rhit.FB_KEY_REVIEW_ACTIVITY, "==", this.id).where(rhit.FB_KEY_REVIEW_AUTHOR, "==", rhit.fbProfileManager.uid).get().then((docSnapshots) => {
+			this._reviewRef.where(rhit.FB_KEY_REVIEW_AUTHOR, "==", rhit.fbProfileManager.uid).get().then((docSnapshots) => {
 				resolve(docSnapshots.docs.length >= 1)
 			}).catch((err) => {
 				reject(err)
 			})
 		})
-		
+
 	}
 
 	get activity() {
@@ -749,10 +769,13 @@ rhit.FbActivityManager = class {
 
 	get rating() {
 		let rating = 0;
-		this._reviews.forEach(review => {
-			rating += review.get(rhit.FB_KEY_REVIEW_VALUE)
-		});
-		return rating / this.numReviews
+		if (this.numReviews > 0) {
+			this._reviews.forEach(review => {
+				rating += review.get(rhit.FB_KEY_REVIEW_VALUE)
+			});
+			rating /= this.numReviews
+		}
+		return rating
 	}
 }
 
@@ -871,18 +894,18 @@ rhit.main = function () {
 		console.log("isSignedIn = ", rhit.fbProfileManager.isSignedIn);
 		if (document.getElementById("home-page")) {
 			rhit.fbActivitiesManager = new rhit.FbActivitiesManager()
-			new rhit.HomePageController();
+			rhit.homePageController = new rhit.HomePageController();
 		} else if (document.getElementById("activity-page")) {
 			rhit.fbActivityManager = new rhit.FbActivityManager(urlParams.get("id"))
-			new rhit.ActivityPageController();
+			rhit.activityPageController = new rhit.ActivityPageController();
 		} else if (document.getElementById("login-page")) {
-			new rhit.LoginPageController();
+			rhit.loginPageController = new rhit.LoginPageController();
 		} else if (document.getElementById("profile-page")) {
-			new rhit.ProfilePageController();
+			rhit.profilePageController = new rhit.ProfilePageController();
 		} else if (document.getElementById("create-page")) {
-			new rhit.CreatePageController();
+			rhit.createPageController = new rhit.CreatePageController();
 		} else if (document.getElementById("review-page")) {
-			new rhit.ReviewPageController(urlParams.get("id"));
+			rhit.reviewPageController = new rhit.ReviewPageController(urlParams.get("id"));
 		}
 	})
 };
