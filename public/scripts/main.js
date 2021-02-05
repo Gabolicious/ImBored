@@ -661,11 +661,12 @@ rhit.FbReviewManager = class {
 
 rhit.FbActivityManager = class {
 	constructor(id) {
+		this.id = id
 		this._documentSnapshot = {};
 		this._reviews = []
 		this._unsubscribe = null;
 		this._ref = firebase.firestore().collection(rhit.FB_COLLECTION_ACTIVITIES).doc(id)
-		this._reviewRef = firebase.firestore().collection(rhit.FB_COLLECTION_REVIEWS).where(rhit.FB_KEY_REVIEW_ACTIVITY, "==", id)
+		this._reviewRef = firebase.firestore().collection(rhit.FB_COLLECTION_REVIEWS)
 	}
 	beginListening(changeListener) {
 		this._unsubscribe = this._ref.onSnapshot((doc) => {
@@ -679,7 +680,7 @@ rhit.FbActivityManager = class {
 		})
 	}
 	beginReviewsListening(changeListener) {
-		this._reviewRef.onSnapshot((reviews) => {
+		this._reviewRef.where(rhit.FB_KEY_REVIEW_ACTIVITY, "==", this.id).onSnapshot((reviews) => {
 			this._reviews = reviews.docs;
 			changeListener();
 		})
@@ -689,7 +690,7 @@ rhit.FbActivityManager = class {
 		return new Promise((resolve, reject) => {
 			this._ref.get().then((doc) => {
 				const activity = doc.data();
-				this._reviewRef.get().then((reviews) => {
+				this._reviewRef.where(rhit.FB_KEY_REVIEW_ACTIVITY, "==", this.id).get().then((reviews) => {
 					activity.numReviews = reviews.docs.length
 					activity.rating = 0
 					if (activity.numReviews > 0) {
@@ -724,7 +725,7 @@ rhit.FbActivityManager = class {
 
 	hasUserReviewed() {
 		return new Promise((resolve, reject) => {
-			this._reviewRef.where(rhit.FB_KEY_REVIEW_AUTHOR, "==", rhit.fbProfileManager.uid).get().then((docSnapshots) => {
+			this._reviewRef.where(rhit.FB_KEY_REVIEW_ACTIVITY, "==", this.id).where(rhit.FB_KEY_REVIEW_AUTHOR, "==", rhit.fbProfileManager.uid).get().then((docSnapshots) => {
 				resolve(docSnapshots.docs.length >= 1)
 			}).catch((err) => {
 				reject(err)
@@ -751,10 +752,6 @@ rhit.FbActivityManager = class {
 
 	get availability() {
 		return this._documentSnapshot.get(rhit.FB_KEY_AVAILABILITY)
-	}
-
-	get id() {
-		return this._documentSnapshot.id
 	}
 
 	get numReviews() {
