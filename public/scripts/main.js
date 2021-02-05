@@ -805,6 +805,15 @@ rhit.ActivityPageController = class {
 	}
 
 	updateReviews() {
+		rhit.fbActivityManager.hasUserReviewed().then((reviewed) => {
+			if (reviewed) {
+				document.getElementById("review-button").style.display = "none"
+			} else {
+				document.getElementById("review-button").href = `./review.html?id=${rhit.fbActivityManager.id}`
+				document.getElementById("review-button").style.display = ""
+			}
+		})
+
 		if (rhit.fbActivityManager.numReviews < 1) {
 			document.getElementById("review-header").innerHTML = `Nobody has reviewed this activity`
 
