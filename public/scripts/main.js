@@ -698,7 +698,7 @@ rhit.FbActivityManager = class {
 						});
 						activity.rating /= activity.numReviews
 					}
-				
+
 					resolve(activity)
 				}).catch((err) => {
 					reject(err)
@@ -793,6 +793,7 @@ rhit.ActivityPageController = class {
 			document.getElementById("login-button").style.display = ""
 		}
 		rhit.fbActivityManager.beginListening(this.updateView.bind(this))
+		rhit.fbActivityManager.beginReviewsListening(this.updateReviews.bind(this))
 	}
 
 	updateView() {
@@ -801,7 +802,79 @@ rhit.ActivityPageController = class {
 		document.getElementById("participants").innerHTML = `Participants: ${rhit.fbActivityManager.participants}`
 		document.getElementById("price-slider").value = rhit.fbActivityManager.price;
 		document.getElementById("access-slider").value = rhit.fbActivityManager.availability;
+	}
 
+	updateReviews() {
+		if (rhit.fbActivityManager.numReviews < 1) {
+			document.getElementById("review-header").innerHTML = `Nobody has reviewed this activity`
+
+		} else {
+			document.getElementById("review-header").innerHTML = `Based on ${rhit.fbActivityManager.numReviews} ${rhit.fbActivityManager.numReviews == 1 ? "review": "reviews"}`
+		}
+		//rhit.fbActivityManager.rating
+		//rhit.fbActivityManager.getReviewIDAtIndex(index)
+		const oneStar = document.getElementById("1-star")
+		const twoStar = document.getElementById("2-star")
+		const threeStar = document.getElementById("3-star")
+		const fourStar = document.getElementById("4-star")
+		const fiveStar = document.getElementById("5-star")
+		oneStar.classList.remove("checked")
+		twoStar.classList.remove("checked")
+		threeStar.classList.remove("checked")
+		fourStar.classList.remove("checked")
+		fiveStar.classList.remove("checked")
+
+		switch (rhit.fbActivityManager.rating) {
+			case 5:
+				fiveStar.classList.add("checked")
+			case 4:
+				fourStar.classList.add("checked")
+			case 3:
+				threeStar.classList.add("checked")
+			case 2:
+				twoStar.classList.add("checked")
+			case 1:
+				oneStar.classList.add("checked")
+		}
+
+		if (rhit.fbActivityManager.numReviews < 1) {
+			document.getElementById("reviews-container").style.display = "none"
+		} else {
+			document.getElementById("reviews-container").innerHTML = `<div class="row ml-1">
+			<h2 class="mt-2"><strong>Reviews:</strong></h2>
+		</div>`
+
+			for (let i = 0; i < rhit.fbActivityManager.numReviews; i++) {
+				new rhit.FbReviewManager(rhit.fbActivityManager.getReviewIDAtIndex(i)).get().then((review) => {
+					document.getElementById("reviews-container").appendChild(this._createReviewCard(review))
+				}).catch((err) => {
+					console.error(err)
+				})
+			}
+
+			document.getElementById("reviews-container").style.display = ""
+
+		}
+	}
+
+	_createReviewCard(review) {
+		return htmlToElement(`<div class="mb-4">
+		<div class="row ml-3">
+			<div class="col-7">
+				<p class="h4"><strong>${review.author}</strong></p>
+			</div>
+			<div class="col-5 mt-1">
+			<span class="fa fa-star ${review.stars >= 1 ? "checked" : ""}"></span>
+			<span class="fa fa-star ${review.stars >= 2 ? "checked" : ""}"></span>
+			<span class="fa fa-star ${review.stars >= 3 ? "checked" : ""}"></span>
+			<span class="fa fa-star ${review.stars >= 4 ? "checked" : ""}"></span>
+			<span class="fa fa-star ${review.stars >= 5 ? "checked" : ""}"></span>
+			</div>
+		</div>
+		<div class="row">
+			<p class="ml-5">${review.text}</p>
+		</div>
+	</div>`)
 	}
 }
 
