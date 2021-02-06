@@ -35,10 +35,12 @@
     #new-activity-name-field {
         width: 200px;
     }
-}
 
-@media (min-width: 767.98px) {
     #activity-body .container {
         margin-top: 13vh;
+    }
+
+    #home-page > .row {
+        margin-bottom: 20px;
     }
 }
