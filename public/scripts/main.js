@@ -251,6 +251,16 @@ rhit.FbProfileManager = class {
 
 rhit.ReviewPageController = class {
 	constructor(uid) {
+		if (rhit.fbProfileManager.isSignedIn) {
+			document.getElementById("profile-name").innerHTML = rhit.fbProfileManager.name;
+			document.getElementById("logout-button").onclick = (event) => {
+				rhit.fbProfileManager.signOut();
+			}
+			document.getElementById("profile-dropdown").style.display = ""
+		} else {
+			window.location.href = "./"
+			return;
+		}
 		if (!uid) {
 			window.location.href = "./index.html"
 			return;
@@ -336,7 +346,6 @@ rhit.ReviewPageController = class {
 rhit.CreatePageController = class {
 	constructor() {
 		if (rhit.fbProfileManager.isSignedIn) {
-			document.getElementById("login-button").style.display = "none"
 			document.getElementById("profile-name").innerHTML = rhit.fbProfileManager.name;
 			document.getElementById("logout-button").onclick = (event) => {
 				rhit.fbProfileManager.signOut();
@@ -388,6 +397,15 @@ rhit.CreatePageController = class {
 
 rhit.ProfilePageController = class {
 	constructor() {
+		if (rhit.fbProfileManager.isSignedIn) {
+			document.getElementById("profile-name").innerHTML = rhit.fbProfileManager.name;
+			document.getElementById("logout-button").onclick = (event) => {
+				rhit.fbProfileManager.signOut();
+			}
+			document.getElementById("profile-dropdown").style.display = ""
+		} else {
+			window.location.href = "./"
+		}
 		document.getElementById("submit-new-name").onclick = (event) => {
 			const newName = document.getElementById("new-name-field").value;
 			if (!newName) {
@@ -552,7 +570,10 @@ rhit.ProfilePageController = class {
 
 rhit.LoginPageController = class {
 	constructor() {
-		if (rhit.fbProfileManager.isSignedIn) window.location.href = "./index.html"
+		if (rhit.fbProfileManager.isSignedIn) {
+			window.location.href = "./index.html"
+			return;
+		}
 
 		$("#createAccountModal").on("show.bs.modal", (e) => {
 			document.getElementById("create-email-field").value = document.getElementById("login-email-field").value;
