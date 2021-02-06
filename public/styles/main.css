@@ -9,6 +9,12 @@
     background: rgba(175, 247, 255, 0.3)
 }
 
+#profile-body {
+    min-height: 100vh;
+    background: rgba(175, 247, 255, 0.2)
+
+}
+
 .container {
     max-width: 600px;
 }
