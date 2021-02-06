@@ -12,7 +12,11 @@
 #profile-body {
     min-height: 100vh;
     background: rgba(175, 247, 255, 0.2)
+}
 
+#login-body {
+    min-height: 100vh;
+    background: rgba(175, 247, 255, 0.2)
 }
 
 .container {
@@ -51,6 +55,7 @@
         width: 200px;
     }
 
+    #login-body .container,
     #review-body .container,
     #activity-body .container {
         margin-top: 13vh;
