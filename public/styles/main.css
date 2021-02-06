@@ -29,6 +29,10 @@
     min-height: 57px;
 }
 
+#review-text {
+    width: 80vw;
+}
+
 @media (min-width: 767.98px) {
 
     #select-group,
@@ -36,11 +40,16 @@
         width: 200px;
     }
 
+    #review-body .container,
     #activity-body .container {
         margin-top: 13vh;
     }
 
     #home-page > .row {
         margin-bottom: 20px;
+    }
+
+    #review-text {
+        width: 37vw;
     }
 }
