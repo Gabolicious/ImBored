@@ -4,17 +4,7 @@
     background: linear-gradient(0deg, rgba(0, 163, 178, 1) 0%, rgba(175, 247, 255, 1) 20%, rgba(255, 255, 255, 1) 45%);
 }
 
-#review-body {
-    min-height: 100vh;
-    background: rgba(175, 247, 255, 0.3)
-}
-
-#profile-body {
-    min-height: 100vh;
-    background: rgba(175, 247, 255, 0.2)
-}
-
-#login-body {
+#profile-body, #login-body, #review-body, #home-body {
     min-height: 100vh;
     background: rgba(175, 247, 255, 0.2)
 }
