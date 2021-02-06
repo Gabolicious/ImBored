@@ -34,7 +34,6 @@
         id="activity-button">Find me an
         activity</button>
     </div>
-
     <div class="row justify-content-center">
       <div class="form-group" id="select-group">
         <label for="type-select">Type:</label>
@@ -53,9 +52,24 @@
       </div>
     </div>
     <div class="row justify-content-center">
-      <div class="form-group">
-        <label for="price-slider">Price (low to high):</label>
-        <input type="range" class="form-range" id="price-slider" value="0" min="0" max="1" step="0.01">
+      <div class="form-group" id="select-group">
+        <label for="access-select">Max Accessibility:</label>
+        <select class="form-control" id="access-select">
+          <option value="Few to no challenges">Few to no challenges</option>
+          <option value="Minor challenges">Minor challenges</option>
+          <option value="Major challenges" selected>Major challenges</option>
+        </select>
+      </div>
+    </div>
+    <div class="row justify-content-center">
+      <div class="form-group" id="select-group">
+        <label for="duration-select">Max Duration:</label>
+        <select class="form-control" id="duration-select">
+          <option value="minutes">Minutes</option>
+          <option value="hours" selected>Hours</option>
+          <option value="days">Days</option>
+          <option value="weeks">Weeks</option>
+        </select>
       </div>
     </div>
     <div class="row justify-content-center">

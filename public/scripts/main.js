@@ -6,18 +6,20 @@ rhit.FB_COLLECTION_REVIEWS = "reviews"
 rhit.FB_COLLECTION_USERS = "users"
 rhit.FB_KEY_HISTORY = "history"
 rhit.FB_KEY_TYPE = "type"
-rhit.FB_KEY_PRICE = "price"
 rhit.FB_KEY_PARTICPANTS = "participants"
 rhit.FB_KEY_ACTIVITY = "activity"
-rhit.FB_KEY_AVAILABILITY = "availability"
+rhit.FB_KEY_AVAILABILITY = "accessibility"
 rhit.FB_KEY_AUTHOR = "author"
+rhit.FB_KEY_DURATION = "duration"
 rhit.FB_KEY_REVIEW_ACTIVITY = "activity"
 rhit.FB_KEY_REVIEW_AUTHOR = "author"
 rhit.FB_KEY_REVIEW_TEXT = "text"
 rhit.FB_KEY_REVIEW_VALUE = "value"
 rhit.FB_KEY_NAME = "name"
 
-rhit.validTypes = ["any", "education", "recreational", "social", "diy", "charity", "cooking", "relaxation", "music", "busywork"]
+rhit.validTypes = ["any", "education", "recreational", "social", "diy", "charity", "cooking", "relaxation", "music", "busywork"];
+rhit.validAccess = ["Few to no challenges", "Minor challenges", "Major challenges"]
+rhit.validDuration = ["minutes", "hours", "days", "weeks"]
 
 rhit.fbProfileManager = null;
 // From: https://stackoverflow.com/questions/494143/creating-a-new-dom-element-from-an-html-string-using-built-in-dom-methods-or-pro/35385518#35385518
@@ -182,7 +184,7 @@ rhit.FbProfileManager = class {
 		})
 	}
 
-	createActivity(name, type, price, participants) {
+	createActivity(name, type, access, participants, duration) {
 		return new Promise((resolve, reject) => {
 			if (!this.isSignedIn) {
 				reject("You are not signed in!")
@@ -191,8 +193,9 @@ rhit.FbProfileManager = class {
 			this._activityRef.add({
 				[rhit.FB_KEY_ACTIVITY]: name,
 				[rhit.FB_KEY_TYPE]: type,
-				[rhit.FB_KEY_PRICE]: price,
+				[rhit.FB_KEY_AVAILABILITY]: access,
 				[rhit.FB_KEY_PARTICPANTS]: participants,
+				[rhit.FB_KEY_DURATION]: duration,
 				[rhit.FB_KEY_AUTHOR]: this.uid
 			}).then((docRef) => {
 				resolve(docRef)
@@ -346,8 +349,9 @@ rhit.CreatePageController = class {
 		document.getElementById("create-button").onclick = (event) => {
 			const name = document.getElementById("new-activity-name-field").value;
 			const type = document.getElementById("type-select").value;
-			const price = parseFloat(document.getElementById("price-slider").value);
 			const participants = parseInt(document.getElementById("participant-input").value);
+			const access = document.getElementById("access-select").value;
+			const duration = document.getElementById("duration-select").value;
 
 			if (!name) {
 				alert("Please provide a name")
@@ -357,16 +361,22 @@ rhit.CreatePageController = class {
 				alert("Please provide a valid type")
 				return;
 			}
-			if (!price || price < 0 || price > 1) {
-				alert("Please provide a valid price")
-				return;
-			}
 			if (!participants || participants < 1) {
 				alert("Please provide a valid number of participants")
 				return;
 			}
 
-			rhit.fbProfileManager.createActivity(name, type, price, participants).then((docRef) => {
+			if (!access || !rhit.validAccess.includes(access)) {
+				alert("Please select a valid accessibility")
+				return;
+			}
+
+			if (!duration || !rhit.validDuration.includes(duration)) {
+				alert("Please select a valid duration")
+				return;
+			}
+
+			rhit.fbProfileManager.createActivity(name, type, access, participants, duration).then((docRef) => {
 				window.location.href = `./activity.html?id=${docRef.id}`
 			}).catch((err) => {
 				console.log("Error", err);
@@ -742,16 +752,16 @@ rhit.FbActivityManager = class {
 		return this._documentSnapshot.get(rhit.FB_KEY_TYPE)
 	}
 
-	get price() {
-		return this._documentSnapshot.get(rhit.FB_KEY_PRICE)
-	}
-
 	get participants() {
 		return this._documentSnapshot.get(rhit.FB_KEY_PARTICPANTS)
 	}
 
 	get availability() {
 		return this._documentSnapshot.get(rhit.FB_KEY_AVAILABILITY)
+	}
+
+	get duration() {
+		return this._documentSnapshot.get(rhit.FB_KEY_DURATION)
 	}
 
 	get numReviews() {
@@ -797,8 +807,6 @@ rhit.ActivityPageController = class {
 		document.getElementById("activity-title").innerHTML = rhit.fbActivityManager.activity;
 		document.getElementById("type").innerHTML = `Type: ${rhit.fbActivityManager.type}`
 		document.getElementById("participants").innerHTML = `Participants: ${rhit.fbActivityManager.participants}`
-		document.getElementById("price-slider").value = rhit.fbActivityManager.price;
-		document.getElementById("access-slider").value = rhit.fbActivityManager.availability;
 	}
 
 	updateReviews() {
@@ -889,13 +897,34 @@ rhit.FbActivitiesManager = class {
 		this._ref = firebase.firestore().collection(rhit.FB_COLLECTION_ACTIVITIES);
 	}
 
-	getRandomActivity(type, price, participants) {
+	getRandomActivity(type, participants, access, duration) {
 		return new Promise((resolve, reject) => {
 			console.log('type :>> ', type);
-			console.log('price :>> ', price);
 			console.log('participants :>> ', participants);
-			let query = this._ref.where(rhit.FB_KEY_PRICE, "<=", price)
-			//query = query.where(rhit.FB_KEY_PARTICPANTS, ">=", participants)
+			console.log('access :>> ', access);
+			console.log('duration :>> ', duration);
+			let allowedAccess = []
+			let allowedDurations = []
+			switch(access) {
+				case "Major challenges":
+					allowedAccess.push("Major chalenges")
+				case "Minor challenges":
+					allowedAccess.push("Minor challenges")
+				case "Few to no challenges":
+					allowedAccess.push("Few to no challenges")
+			}
+			switch(duration) {
+				case "weeks":
+					allowedDurations.push("weeks")
+				case "days":
+					allowedDurations.push("days")
+				case "hours":
+					allowedDurations.push("hours")
+				case "minutes":
+					allowedDurations.push("minutes")
+			}
+			let query = this._ref.where(rhit.FB_KEY_PARTICPANTS, ">=", participants).where(rhit.FB_KEY_DURATION, "in", allowedDurations)
+			//.where(rhit.FB_KEY_AVAILABILITY, "in", allowedAccess)
 			if (type != "any") {
 				query = query.where(rhit.FB_KEY_TYPE, "==", type)
 			}
@@ -903,7 +932,7 @@ rhit.FbActivitiesManager = class {
 			query.get().then((querySnapshots) => {
 				const possibleSnapshots = []
 				querySnapshots.forEach(doc => {
-					if (doc.data()[rhit.FB_KEY_PARTICPANTS] >= participants) possibleSnapshots.push(doc.id)
+					if (allowedAccess.includes(doc.data()[rhit.FB_KEY_AVAILABILITY])) possibleSnapshots.push(doc.id)
 				});
 				console.log(possibleSnapshots);
 				if (possibleSnapshots.length < 1) {
@@ -939,23 +968,30 @@ rhit.HomePageController = class {
 		}
 		document.getElementById("activity-button").onclick = (event) => {
 			const type = document.getElementById("type-select").value.toLowerCase();
-			const price = parseFloat(document.getElementById("price-slider").value);
 			const participants = parseInt(document.getElementById("participant-input").value);
-
+			const access = document.getElementById("access-select").value;
+			const duration = document.getElementById("duration-select").value;
 			if (participants < 1) {
 				alert("Please select a valid number of participants")
 				return;
 			}
-			if (price < 0 || price > 1) {
-				alert("Please select a valid price")
-				return;
-			}
-			if (!rhit.validTypes.includes(type)) {
+
+			if (!type || !rhit.validTypes.includes(type)) {
 				alert("Please select a valid type")
 				return;
 			}
 
-			rhit.fbActivitiesManager.getRandomActivity(type, price, participants).then((randomActivity) => {
+			if (!access || !rhit.validAccess.includes(access)) {
+				alert("Please select a valid maximum accessibility")
+				return;
+			}
+
+			if (!duration || !rhit.validDuration.includes(duration)) {
+				alert("Please select a valid duration")
+				return;
+			}
+
+			rhit.fbActivitiesManager.getRandomActivity(type, participants, access, duration).then((randomActivity) => {
 				window.location.href = `/activity.html?id=${randomActivity}`
 			}).catch((error) => {
 				alert(error)
