@@ -1,3 +1,13 @@
+#activity-body {
+    min-height: 100vh;
+    background: rgb(0, 163, 178);
+    background: linear-gradient(0deg, rgba(0, 163, 178, 1) 0%, rgba(175, 247, 255, 1) 20%, rgba(255, 255, 255, 1) 45%);
+}
+
+.container {
+    max-width: 600px;
+}
+
 #select-group {
     width: 55%;
 }
@@ -20,7 +30,15 @@
 }
 
 @media (min-width: 767.98px) {
-    #select-group, #new-activity-name-field {
+
+    #select-group,
+    #new-activity-name-field {
         width: 200px;
+    }
+}
+
+@media (min-width: 767.98px) {
+    #activity-body .container {
+        margin-top: 13vh;
     }
 }
