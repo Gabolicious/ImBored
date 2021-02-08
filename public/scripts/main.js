@@ -163,8 +163,16 @@ rhit.FbProfileManager = class {
 					[rhit.FB_KEY_NAME]: name
 				}).then(() => {
 					//success
-					this.creatingAccount = false; //stop creating account
-					resolve();
+					firebase.firestore().collection(rhit.FB_COLLECTION_HISTORY).doc(user.uid).set({
+						[rhit.FB_KEY_HISTORY]: []
+					}).then(() => {
+						this.creatingAccount = false; //stop creating account
+						resolve();
+					}).catch((err) => {
+						this.creatingAccount = false;
+						console.log(err);
+						reject("Error creating your history")
+					})
 				}).catch((err) => {
 					//error
 					this.creatingAccount = false;
@@ -174,7 +182,15 @@ rhit.FbProfileManager = class {
 			}).catch((error) => {
 				this.creatingAccount = false;
 				console.log(error);
-				reject("Error creating your account");
+				if (error.code == "auth/email-already-in-use") {
+					reject("There is already an account related to that email!")
+				} else if (error.code == "auth/weak-password") {
+					reject("Your password is too weak, try a stronger password")
+				} else if (error.code == "auth/invalid-email") {
+					reject("Invalid email provided, try a different email.")
+				} else {
+					reject("Error creating your account");
+				}
 			});
 		})
 	}
@@ -198,7 +214,15 @@ rhit.FbProfileManager = class {
 			}).catch((err) => {
 				//Error
 				console.log(err);
-				reject("There was an error signing you in, is your email and password correct?");
+				if (err.code == "auth/invalid-email") {
+					reject("The email you provided is not a valid email address")
+				} else if (err.code == "auth/user-not-found") {
+					reject("There is not an account associated with that email.")
+				} else if (err.code == "auth/wrong-password") {
+					reject("Your password is incorrect.")
+				} else {
+					reject("There was an error signing you in, try again later.");
+				}
 			})
 		})
 	}
