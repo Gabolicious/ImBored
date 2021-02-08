@@ -442,7 +442,7 @@ rhit.ReviewPageController = class {
 		// Listen to activity changes (required to see if user has reviewed)
 		this._activity.beginListening(this.updateView.bind(this));
 		// Listen for username changes
-		this._activity.beginUsernameListening(this.updateDisplayName.bind(this));
+		rhit.fbProfileManager.beginUsernameListening(this.updateDisplayName.bind(this));
 	}
 
 	updateDisplayName() {
@@ -582,6 +582,7 @@ rhit.ProfilePageController = class {
 
 	// If username changes
 	updateDisplayName() {
+		document.getElementById("new-name-field").value = ""
 		document.getElementById("profile-name").innerHTML = rhit.fbProfileManager.name;
 		document.getElementById("profile-dropdown").style.display = "";
 	}
@@ -1237,9 +1238,9 @@ rhit.HomePageController = class {
 			}).catch((error) => {
 				alert(error)
 			})
-
-			rhit.fbProfileManager.beginUsernameListening(this.updateDisplayName.bind(this));
 		}
+
+		rhit.fbProfileManager.beginUsernameListening(this.updateDisplayName.bind(this));
 	}
 
 	updateDisplayName() {
