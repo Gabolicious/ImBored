@@ -1,27 +1,35 @@
 var rhit = rhit || {};
 
-rhit.FB_COLLECTION_ACTIVITIES = "activities"
-rhit.FB_COLLECTION_HISTORY = "historys"
-rhit.FB_COLLECTION_REVIEWS = "reviews"
-rhit.FB_COLLECTION_USERS = "users"
-rhit.FB_KEY_HISTORY = "history"
-rhit.FB_KEY_TYPE = "type"
-rhit.FB_KEY_PARTICPANTS = "participants"
-rhit.FB_KEY_ACTIVITY = "activity"
-rhit.FB_KEY_AVAILABILITY = "accessibility"
-rhit.FB_KEY_AUTHOR = "author"
-rhit.FB_KEY_DURATION = "duration"
-rhit.FB_KEY_REVIEW_ACTIVITY = "activity"
-rhit.FB_KEY_REVIEW_AUTHOR = "author"
-rhit.FB_KEY_REVIEW_TEXT = "text"
-rhit.FB_KEY_REVIEW_VALUE = "value"
-rhit.FB_KEY_NAME = "name"
+// Firstore collection names
+rhit.FB_COLLECTION_ACTIVITIES = "activities";
+rhit.FB_COLLECTION_HISTORY = "historys";
+rhit.FB_COLLECTION_REVIEWS = "reviews";
+rhit.FB_COLLECTION_USERS = "users";
 
+// Firestore data names
+rhit.FB_KEY_HISTORY = "history";
+rhit.FB_KEY_TYPE = "type";
+rhit.FB_KEY_PARTICPANTS = "participants";
+rhit.FB_KEY_ACTIVITY = "activity";
+rhit.FB_KEY_AVAILABILITY = "accessibility";
+rhit.FB_KEY_AUTHOR = "author";
+rhit.FB_KEY_DURATION = "duration";
+rhit.FB_KEY_REVIEW_ACTIVITY = "activity";
+rhit.FB_KEY_REVIEW_AUTHOR = "author";
+rhit.FB_KEY_REVIEW_TEXT = "text";
+rhit.FB_KEY_REVIEW_VALUE = "value";
+rhit.FB_KEY_REVIEW_TIME = "createdAt"
+rhit.FB_KEY_NAME = "name";
+rhit.FB_KEY_CREATED = "createdAt"
+
+// Valid values for activity type, access and duration
 rhit.validTypes = ["any", "education", "recreational", "social", "diy", "charity", "cooking", "relaxation", "music", "busywork"];
-rhit.validAccess = ["Few to no challenges", "Minor challenges", "Major challenges"]
-rhit.validDuration = ["minutes", "hours", "days", "weeks"]
+rhit.validAccess = ["Few to no challenges", "Minor challenges", "Major challenges"];
+rhit.validDuration = ["minutes", "hours", "days", "weeks"];
 
+// Global profile manager
 rhit.fbProfileManager = null;
+
 // From: https://stackoverflow.com/questions/494143/creating-a-new-dom-element-from-an-html-string-using-built-in-dom-methods-or-pro/35385518#35385518
 /**
  * @param {String} HTML representing a single element
@@ -36,309 +44,461 @@ function htmlToElement(html) {
 
 rhit.FbProfileManager = class {
 	constructor() {
-		this._user = null;
-		this._historySnapshot = null;
-		this._createdSnapshots = null;
-		this._reviewSnapshots = null;
-		this._historyRef = null;
-		this._activityRef = firebase.firestore().collection(rhit.FB_COLLECTION_ACTIVITIES);
-		this.displayName = null;
-		this._userRef = null;
-		this.creatingAccount = false;
-		this._reviewRef = firebase.firestore().collection(rhit.FB_COLLECTION_REVIEWS)
+		this._user = null; //Track user object
+		this._historySnapshot = null; //History for the user
+		this._createdSnapshots = null; //User created activities
+		this._reviewSnapshots = null; //User reviews
+		this._historyRef = null; //Reference to firestore history collection for user
+		this._activityRef = firebase.firestore().collection(rhit.FB_COLLECTION_ACTIVITIES); //reference to firestore activities
+		this.displayName = null; //The users display name
+		this._userRef = null; //Reference to users display name
+		this.creatingAccount = false; //If they are currently creating an account (prevents page refresh when creating account)
+		this._reviewRef = firebase.firestore().collection(rhit.FB_COLLECTION_REVIEWS); //reference to firestore reviews
 	}
+
+	// Listen to sign in/sign out/name change
 	beginListening(changeListener) {
 		firebase.auth().onAuthStateChanged((user) => {
-			this._user = user;
-			if (this._user) {
-				this._historyRef = firebase.firestore().collection(rhit.FB_COLLECTION_HISTORY).doc(this._user.uid)
-				let gotHistory = false;
-				let gotName = false;
-				this._historyRef.get().then((docSnap) => {
-					if (!docSnap.exists) {
-						this._historyRef.set({
-							[rhit.FB_KEY_HISTORY]: []
-						}).catch((err) => {
-							console.log(err);
-							alert("Unable to instantiate the user.")
-						})
-					}
-					gotHistory = true;
-					if (gotName) {
-						changeListener()
-					}
-				})
-				this._userRef = firebase.firestore().collection(rhit.FB_COLLECTION_USERS).doc(this._user.uid);
-				this._userRef.get().then((docSnap) => {
-					this.displayName = docSnap.get(rhit.FB_KEY_NAME)
-					gotName = true;
-					if (gotHistory) {
-						changeListener()
-					}
-				})
+			this._user = user; //Set saved user to current user
+			if (this._user) { //if user is signed in
+				this._historyRef = firebase.firestore().collection(rhit.FB_COLLECTION_HISTORY).doc(this._user.uid); //save users histoy reference
+
+				this._userRef = firebase.firestore().collection(rhit.FB_COLLECTION_USERS).doc(this._user.uid); //save username reference
 			} else {
-				this._historyRef = null;
-				this._userRef = null;
-				changeListener();
+				this._historyRef = null; //remove saved history
+				this._userRef = null; //remove saved username
 			}
+			changeListener();
 		})
 	}
 
+	//listen for username change
+	beginUsernameListening(changeListener) {
+		this._userRef.onSnapshot((docSnap) => {
+			this.displayName = docSnap.get(rhit.FB_KEY_NAME); //save displayName
+			changeListener(); //update
+		})
+	}
+
+	//listen for updated created activities
 	beginCreatedListening(changeListener) {
-		this._activityRef.where(rhit.FB_KEY_AUTHOR, "==", this.uid).onSnapshot((docSnapshots) => {
-			this._createdSnapshots = docSnapshots.docs;
+		//Get activitys made by current user and order from new to old
+		this._activityRef.where(rhit.FB_KEY_AUTHOR, "==", this.uid).orderBy(rhit.FB_KEY_CREATED, "desc").onSnapshot((docSnapshots) => {
+			this._createdSnapshots = docSnapshots.docs; //Save created docs
 
-			if (changeListener) {
-				changeListener()
-			}
+			changeListener(); //update
 		})
 	}
 
+	//listen for new activities in history
 	beginHistoryListening(changeListener) {
 		this._historyRef.onSnapshot((docSnapshot) => {
-			this._historySnapshot = docSnapshot.get(rhit.FB_KEY_HISTORY);
+			this._historySnapshot = docSnapshot.get(rhit.FB_KEY_HISTORY); //save history
 
-			if (changeListener) {
-				changeListener();
-			}
+			changeListener(); //update
 		})
 	}
 
+	//listen for new reviews
 	beginReviewListening(changeListener) {
-		this._reviewRef.where(rhit.FB_KEY_REVIEW_AUTHOR, "==", this.uid).onSnapshot((docSnapshots) => {
-			this._reviewSnapshots = docSnapshots.docs;
+		//Get reviews made by current user
+		this._reviewRef.where(rhit.FB_KEY_REVIEW_AUTHOR, "==", this.uid).orderBy(rhit.FB_KEY_REVIEW_TIME, "desc").onSnapshot((docSnapshots) => {
+			this._reviewSnapshots = docSnapshots.docs; //save reviews
 
-			if (changeListener) {
-				changeListener()
-			}
+			changeListener(); //update
 		})
 	}
 
+	//Update the current users username
 	updateUsername(name) {
-		return this._userRef.set({
-			[rhit.FB_KEY_NAME]: name
+		//Return a promise
+		return new Promise((resolve, reject) => {
+			if (!name) {
+				reject("Please provide a valid new name");
+				return;
+			}
+
+			this._userRef.set({
+				[rhit.FB_KEY_NAME]: name //update username
+			}).then(() => {
+				resolve(); //success
+			}).catch((err) => {
+				console.log(err); //log error
+				reject("Error updating username"); //return custom error message
+			})
 		})
 	}
-	createAccount(email, password, name) {
+
+	// Create a new user account
+	createAccount(email, password, confirmPassword,  name) {
+		//return a promise
 		return new Promise((resolve, reject) => {
-			this.creatingAccount = true;
+			if (!password || !confirmPassword) {
+				reject("A password is required");
+				return;
+			}
+
+			if (password !== confirmPassword) {
+				reject("Passwords do not match!");
+				return;
+			}
+
+			if (!email) {
+				reject("Please enter a valid email.");
+				return;
+			}
+
+			if (!name) {
+				reject("Please enter a valid username");
+				return;
+			}
+			
+			this.creatingAccount = true; //Set that currently creating account to prevent redirects
+
 			firebase.auth().createUserWithEmailAndPassword(email, password).then((userCredentials) => {
-				const user = userCredentials.user
+				const user = userCredentials.user; //save credentials
+
+				//Create a new entry in user table to track username
 				firebase.firestore().collection(rhit.FB_COLLECTION_USERS).doc(user.uid).set({
 					[rhit.FB_KEY_NAME]: name
 				}).then(() => {
-					this._userRef = firebase.firestore().collection(rhit.FB_COLLECTION_USERS).doc(user.uid);
-					this.displayName = name;
-					this.creatingAccount = false;
-					resolve()
+					//success
+					this.creatingAccount = false; //stop creating account
+					resolve();
 				}).catch((err) => {
+					//error
 					this.creatingAccount = false;
-					reject(err)
+					console.log(err);
+					reject("Error saving your username");
 				});
 			}).catch((error) => {
 				this.creatingAccount = false;
-				reject(error)
+				console.log(error);
+				reject("Error creating your account");
 			});
 		})
-
 	}
+
+	//Sign the user in
 	signIn(email, password) {
-		console.log(`login for email: ${email} password: ${password}`);
+		return new Promise((resolve, reject) => {
+			if (!email) {
+				reject("Please enter an email")
+				return;
+			}
+			if (!password) {
+				reject("Please enter a password")
+				return;
+			}
 
-		return firebase.auth().signInWithEmailAndPassword(email, password);
+			//Sign in the user
+			firebase.auth().signInWithEmailAndPassword(email, password).then(() => {
+				//success
+				resolve();
+			}).catch((err) => {
+				//Error
+				console.log(err);
+				reject("There was an error signing you in, is your email and password correct?");
+			})
+		})
 	}
+
+	//Log out the user
 	signOut() {
-		return firebase.auth().signOut();
+		return new Promise((resolve, reject) => {
+			firebase.auth().signOut().then(() => {
+				//success
+				resolve();
+			}).catch((err) => {
+				//Error
+				console.log(err);
+				reject("There was an error signing you out");
+			})
+		})
 	}
 
+	//Delete the users account
 	deleteAccount(password) {
 		return new Promise((resolve, reject) => {
+			if (!password) {
+				reject("Please provide a password");
+				return;
+			}
+
+			//reauthenticate the user
 			this._user.reauthenticateWithCredential(firebase.auth.EmailAuthProvider.credential(
 				this._user.email,
 				password
 			)).then(() => {
+				//success
 				this._user.delete().then(() => {
-					resolve()
+					//deleted
+					resolve();
 				}).catch((err) => {
-					reject(err)
+					console.log(err);
+					reject("Error deleting the users account");
 				})
 			}).catch((err) => {
-				reject(err)
+				//error
+				console.log(err);
+				reject("Error reauthenticating, is your password correct?");
 			})
 		})
 	}
 
+	// Add an activity to history
 	addToHistory(activityID) {
 		return new Promise((resolve, reject) => {
 			if (!this.isSignedIn) {
+				// User isn't signed in, ignore
 				resolve();
 				return;
 			}
+
+			//Add to users history
 			this._historyRef.update({
-				[rhit.FB_KEY_HISTORY]: firebase.firestore.FieldValue.arrayUnion(activityID)
+				[rhit.FB_KEY_HISTORY]: firebase.firestore.FieldValue.arrayUnion(activityID) //add to end of array
 			}).then(() => {
-				resolve();
+				resolve(); //success
 			}).catch((err) => {
-				reject(err)
+				console.log(err);
+				reject("Error adding activity to your history");
 			})
 		})
 	}
 
+	// Create a new activity
 	createActivity(name, type, access, participants, duration) {
 		return new Promise((resolve, reject) => {
 			if (!this.isSignedIn) {
-				reject("You are not signed in!")
+				//Must be signed in
+				reject("You are not signed in!");
 				return;
 			}
+
+			if (!name) {
+				reject("Please provide a name")
+				return;
+			}
+			if (!type || !rhit.validTypes.includes(type)) {
+				reject("Please provide a valid type")
+				return;
+			}
+			if (!participants || participants < 1) {
+				reject("Please provide a valid number of participants")
+				return;
+			}
+
+			if (!access || !rhit.validAccess.includes(access)) {
+				reject("Please select a valid accessibility")
+				return;
+			}
+
+			if (!duration || !rhit.validDuration.includes(duration)) {
+				reject("Please select a valid duration")
+				return;
+			}
+
+			//Add to activity collection
 			this._activityRef.add({
 				[rhit.FB_KEY_ACTIVITY]: name,
 				[rhit.FB_KEY_TYPE]: type,
 				[rhit.FB_KEY_AVAILABILITY]: access,
 				[rhit.FB_KEY_PARTICPANTS]: participants,
 				[rhit.FB_KEY_DURATION]: duration,
-				[rhit.FB_KEY_AUTHOR]: this.uid
+				[rhit.FB_KEY_AUTHOR]: this.uid,
+				[rhit.FB_KEY_CREATED]: firebase.firestore.Timestamp.now()
 			}).then((docRef) => {
-				resolve(docRef)
+				// Done
+				resolve(docRef);
 			}).catch((err) => {
-				reject(err)
+				console.log(err);
+				reject("Error creating activity!");
 			})
 		})
 	}
 
+	//get if signed in
 	get isSignedIn() {
 		return !!this._user;
 	}
+
+	//get uid of user
 	get uid() {
-		return this._user.uid
-	}
-	get name() {
-		return this.displayName
+		return this._user.uid;
 	}
 
+	//get name of user
+	get name() {
+		return this.displayName;
+	}
+
+	//get the number of created activities
 	get createdLength() {
 		if (!this._createdSnapshots) return 0;
 		return this._createdSnapshots.length;
 	}
 
+	//get the id of the created activity at an index
 	createdIDAtIndex(index) {
 		const createdID = this._createdSnapshots[index];
-		if (!createdID) throw new Error("Index out of bounds")
-		return createdID.id
+		if (!createdID) throw new Error("Index out of bounds");
+		return createdID.id;
 	}
 
+	//get number of items in history
 	get historyLength() {
-		if (!this._historySnapshot) return 0
+		if (!this._historySnapshot) return 0;
 		return this._historySnapshot.length;
 	}
 
+	//get id of activity in history at index
 	historyIDAtIndex(index) {
-		const historyRef = this._historySnapshot[index]
-		if (!historyRef) throw new Error("Index out of bounds")
-		return historyRef
+		const historyRef = this._historySnapshot[index];
+		if (!historyRef) throw new Error("Index out of bounds");
+		return historyRef;
 	}
 
+	//get number of reviews
 	get reviewLength() {
 		if (!this._reviewSnapshots) return 0;
 		return this._reviewSnapshots.length;
 	}
 
+	//get review id at index
 	reviewIDAtIndex(index) {
-		const reviewID = this._reviewSnapshots[index]
-		if (!reviewID) throw new Error("Index out of bounds")
-		return reviewID.id
+		const reviewID = this._reviewSnapshots[index];
+		if (!reviewID) throw new Error("Index out of bounds");
+		return reviewID.id;
 	}
 }
 
 rhit.ReviewPageController = class {
 	constructor(uid) {
 		if (rhit.fbProfileManager.isSignedIn) {
-			document.getElementById("profile-name").innerHTML = rhit.fbProfileManager.name;
+			//if user is signed in add sign out button and show profile
 			document.getElementById("logout-button").onclick = (event) => {
-				rhit.fbProfileManager.signOut();
+				rhit.fbProfileManager.signOut().catch((err) => {
+					alert(err);
+				})
 			}
-			document.getElementById("profile-dropdown").style.display = ""
 		} else {
-			window.location.href = "./"
+			//if user isn't signed in go back, must be signed in to view page
+			alert("You must be signed in to review an activity");
+			window.location.href = "./";
 			return;
 		}
+
 		if (!uid) {
-			window.location.href = "./index.html"
+			alert("No activity provided");
+			window.location.href = "./index.html";
 			return;
 		}
-		this._activity = new rhit.FbActivityManager(uid);
-		this.reviewValue = 5;
-		document.getElementById("1-star").onclick = () => {
-			this._updateReviewStars(1)
-		}
-		document.getElementById("2-star").onclick = () => {
-			this._updateReviewStars(2)
-		}
-		document.getElementById("3-star").onclick = () => {
-			this._updateReviewStars(3)
-		}
-		document.getElementById("4-star").onclick = () => {
-			this._updateReviewStars(4)
-		}
-		document.getElementById("5-star").onclick = () => {
-			this._updateReviewStars(5)
-		}
 
-		document.getElementById("submit-button").onclick = () => {
-			const reviewText = document.getElementById("review-text").value || "";
-			reviewText.replace(/\r?\n|\r/g, "")
-
-			if (!this.reviewValue || this.reviewValue < 1 || this.reviewValue > 5) {
-				alert("Please provide a valid rating")
+		this._activity = new rhit.FbActivityManager(uid); //make a new activity with the ID
+		this._activity.exists.then((exists) => {
+			if (!exists) {
+				alert("Invalid activity ID");
+				window.location.href = "./index.html";
 				return;
 			}
+		}).catch((message) => {
+			alert(message);
+			window.location.href = "./index.html"
+		});
+
+		this.reviewValue = 5; //Default review value
+
+		//Add click listeners to udpate review with
+		document.getElementById("1-star").onclick = (event) => {
+			this._updateReviewStars(1);
+		}
+		document.getElementById("2-star").onclick = (event) => {
+			this._updateReviewStars(2);
+		}
+		document.getElementById("3-star").onclick = (event) => {
+			this._updateReviewStars(3);
+		}
+		document.getElementById("4-star").onclick = (event) => {
+			this._updateReviewStars(4);
+		}
+		document.getElementById("5-star").onclick = (event) => {
+			this._updateReviewStars(5);
+		}
+
+		//listen for user submitting review
+		document.getElementById("submit-button").onclick = () => {
+			const reviewText = document.getElementById("review-text").value || "";
 
 			this._activity.addReview(this.reviewValue, reviewText).then((reviewRef) => {
-				window.location.href = `./activity.html?id=${this._activity.id}`
+				//Redirect to reviewed activity
+				window.location.href = `./activity.html?id=${this._activity.id}`;
 			}).catch((err) => {
-				console.log("Error", err);
-				alert("There was an error adding the review!")
+				//Alert error
+				alert(err);
 			})
 		}
 
-		this._activity.beginListening(this.updateView.bind(this))
+		// Listen to activity changes (required to see if user has reviewed)
+		this._activity.beginListening(this.updateView.bind(this));
+		// Listen for username changes
+		this._activity.beginUsernameListening(this.updateDisplayName.bind(this));
+	}
+
+	updateDisplayName() {
+		//update showed name
+		document.getElementById("profile-name").innerHTML = rhit.fbProfileManager.name;
+		document.getElementById("profile-dropdown").style.display = "";
 	}
 
 	updateView() {
+		//Check if user has reviewed the activity
 		this._activity.hasUserReviewed().then((reviewed) => {
 			if (reviewed) {
-				window.location.href = "./index.html"
+				//reject reviewing twice
+				alert("You cannot review an activity twice");
+				window.location.href = "./index.html";
+			} else {
+				// Set activity title
+				document.getElementById("review-title").innerHTML = this._activity.activity;
 			}
 		}).catch((err) => {
-			console.log("error", err);
+			//unable to verify if reviewed
+			alert(err);
+			window.location.href = "./index.html";
 		})
-		document.getElementById("review-title").innerHTML = this._activity.activity
 	}
 
 	_updateReviewStars(val) {
+		//save review value
 		this.reviewValue = val;
-		const oneStar = document.getElementById("1-star")
-		const twoStar = document.getElementById("2-star")
-		const threeStar = document.getElementById("3-star")
-		const fourStar = document.getElementById("4-star")
-		const fiveStar = document.getElementById("5-star")
-		oneStar.classList.remove("checked")
-		twoStar.classList.remove("checked")
-		threeStar.classList.remove("checked")
-		fourStar.classList.remove("checked")
-		fiveStar.classList.remove("checked")
 
+		//get elements
+		const oneStar = document.getElementById("1-star");
+		const twoStar = document.getElementById("2-star");
+		const threeStar = document.getElementById("3-star");
+		const fourStar = document.getElementById("4-star");
+		const fiveStar = document.getElementById("5-star");
+
+		//uncheck all
+		oneStar.classList.remove("checked");
+		twoStar.classList.remove("checked");
+		threeStar.classList.remove("checked");
+		fourStar.classList.remove("checked");
+		fiveStar.classList.remove("checked");
+
+		//Check stars
 		switch (val) {
 			case 5:
-				fiveStar.classList.add("checked")
+				fiveStar.classList.add("checked");
 			case 4:
-				fourStar.classList.add("checked")
+				fourStar.classList.add("checked");
 			case 3:
-				threeStar.classList.add("checked")
+				threeStar.classList.add("checked");
 			case 2:
-				twoStar.classList.add("checked")
+				twoStar.classList.add("checked");
 			case 1:
-				oneStar.classList.add("checked")
-
+				oneStar.classList.add("checked");
 		}
 	}
 }
@@ -346,15 +506,19 @@ rhit.ReviewPageController = class {
 rhit.CreatePageController = class {
 	constructor() {
 		if (rhit.fbProfileManager.isSignedIn) {
-			document.getElementById("profile-name").innerHTML = rhit.fbProfileManager.name;
+			//if user is signed in add log out and show profile
 			document.getElementById("logout-button").onclick = (event) => {
-				rhit.fbProfileManager.signOut();
+				rhit.fbProfileManager.signOut().catch((err) => {
+					alert(err);
+				})
 			}
-			document.getElementById("profile-dropdown").style.display = ""
 		} else {
-			window.location.href = "./"
+			//if user isn't signed in
+			alert("You must be signed in to create an activity");
+			window.location.href = "./";
 		}
 
+		//Handle create click
 		document.getElementById("create-button").onclick = (event) => {
 			const name = document.getElementById("new-activity-name-field").value;
 			const type = document.getElementById("type-select").value;
@@ -362,157 +526,133 @@ rhit.CreatePageController = class {
 			const access = document.getElementById("access-select").value;
 			const duration = document.getElementById("duration-select").value;
 
-			if (!name) {
-				alert("Please provide a name")
-				return;
-			}
-			if (!type || !rhit.validTypes.includes(type)) {
-				alert("Please provide a valid type")
-				return;
-			}
-			if (!participants || participants < 1) {
-				alert("Please provide a valid number of participants")
-				return;
-			}
-
-			if (!access || !rhit.validAccess.includes(access)) {
-				alert("Please select a valid accessibility")
-				return;
-			}
-
-			if (!duration || !rhit.validDuration.includes(duration)) {
-				alert("Please select a valid duration")
-				return;
-			}
-
 			rhit.fbProfileManager.createActivity(name, type, access, participants, duration).then((docRef) => {
-				window.location.href = `./activity.html?id=${docRef.id}`
+				window.location.href = `./activity.html?id=${docRef.id}`;
 			}).catch((err) => {
-				console.log("Error", err);
-				alert("There was an error creating the activity, are you signed in?")
+				alert(err);
 			})
 		}
+
+		rhit.fbProfileManager.beginUsernameListening(this.updateDisplayName.bind(this));
+	}
+
+	//Handle new name
+	updateDisplayName() {
+		document.getElementById("profile-name").innerHTML = rhit.fbProfileManager.name;
+		document.getElementById("profile-dropdown").style.display = "";
 	}
 }
 
 rhit.ProfilePageController = class {
 	constructor() {
 		if (rhit.fbProfileManager.isSignedIn) {
-			document.getElementById("profile-name").innerHTML = rhit.fbProfileManager.name;
+			//enable sign out button
 			document.getElementById("logout-button").onclick = (event) => {
-				rhit.fbProfileManager.signOut();
+				rhit.fbProfileManager.signOut().catch((err) => {
+					alert(err);
+				})
 			}
-			document.getElementById("profile-dropdown").style.display = ""
 		} else {
-			window.location.href = "./"
+			window.location.href = "./";
 		}
+
+		// If user tries to change their name
 		document.getElementById("submit-new-name").onclick = (event) => {
 			const newName = document.getElementById("new-name-field").value;
-			if (!newName) {
-				alert("Please provide a valid new name")
-				return;
-			}
 
-			rhit.fbProfileManager.updateUsername(newName).then(() => {
-				this.updateView();
-			}).catch((err) => {
-				console.log("Error", err);
-				alert("Error changing username")
+			rhit.fbProfileManager.updateUsername(newName).catch((err) => {
+				alert(err);
 			})
 		}
 
+		// If user tries to delete account
 		document.getElementById("delete-account-button").onclick = (event) => {
 			const pwd = document.getElementById("delete-password-field").value;
-			if (!pwd) {
-				alert("Please provide a password")
-				return;
-			}
+
 			rhit.fbProfileManager.deleteAccount(pwd).catch((err) => {
-				console.error(err)
-				alert("Error deleting your account!")
+				alert(err);
 			})
 		}
 
-		rhit.fbProfileManager.beginHistoryListening(this.updateHistory.bind(this))
-		rhit.fbProfileManager.beginCreatedListening(this.updateCreated.bind(this))
-		rhit.fbProfileManager.beginReviewListening(this.updateReviews.bind(this))
-		this.updateView();
+		rhit.fbProfileManager.beginHistoryListening(this.updateHistory.bind(this));
+		rhit.fbProfileManager.beginCreatedListening(this.updateCreated.bind(this));
+		rhit.fbProfileManager.beginReviewListening(this.updateReviews.bind(this));
+		rhit.fbProfileManager.beginUsernameListening(this.updateDisplayName.bind(this));
 	}
 
+	// If username changes
+	updateDisplayName() {
+		document.getElementById("profile-name").innerHTML = rhit.fbProfileManager.name;
+		document.getElementById("profile-dropdown").style.display = "";
+	}
+
+	// If new reviews
 	updateReviews() {
 		if (rhit.fbProfileManager.reviewLength < 1) {
-			document.getElementById("reviews-container").style.display = "none"
+			//Hide review container
+			document.getElementById("reviews-container").style.display = "none";
 		} else {
+			//Reset container
 			document.getElementById("reviews-container").innerHTML = `<hr>
             <div class="row ml-1">
                 <h2 class="mt-2"><strong>Reviews:</strong></h2>
-            </div>`
+            </div>`;
+			//Go through each review
 			for (let i = 0; i < rhit.fbProfileManager.reviewLength; i++) {
 				new rhit.FbReviewManager(rhit.fbProfileManager.reviewIDAtIndex(i)).get().then((review) => {
-					document.getElementById("reviews-container").appendChild(this._createReviewCard(review))
+					document.getElementById("reviews-container").appendChild(this._createReviewCard(review));
 				}).catch((err) => {
-					console.error(err)
+					alert(err);
 				})
 			}
+			//Display
 			document.getElementById("reviews-container").style.display = ""
 		}
 	}
 
+	// New history
 	updateHistory() {
 		if (rhit.fbProfileManager.historyLength < 1) {
-			document.getElementById("history-container").style.display = "none"
+			document.getElementById("history-container").style.display = "none";
 		} else {
 			document.getElementById("history-container").innerHTML = `<hr>
             <div class="row ml-1">
                 <h2 class="mt-2"><strong>History:</strong></h2>
-            </div>`
-			for (let i = 0; i < rhit.fbProfileManager.historyLength; i++) {
+            </div>`;
+			for (let i = rhit.fbProfileManager.historyLength - 1; i >= 0; i--) {
 				new rhit.FbActivityManager(rhit.fbProfileManager.historyIDAtIndex(i)).get().then((history) => {
-					console.log(history);
-					history.id = rhit.fbProfileManager.historyIDAtIndex(i)
-					document.getElementById("history-container").appendChild(this._createHistoryCard(history))
-
+					history.id = rhit.fbProfileManager.historyIDAtIndex(i);
+					document.getElementById("history-container").appendChild(this._createHistoryCard(history));
 				}).catch((err) => {
-					console.error(err)
+					alert(err);
 				})
 			}
-			document.getElementById("history-container").style.display = ""
+			document.getElementById("history-container").style.display = "";
 		}
 	}
 
+	// New created
 	updateCreated() {
 		if (rhit.fbProfileManager.createdLength < 1) {
-			document.getElementById("activities-container").style.display = "none"
+			document.getElementById("activities-container").style.display = "none";
 		} else {
 			document.getElementById("activities-container").innerHTML = `<hr>
             <div class="row ml-1">
                 <h2 class="mt-2"><strong>Your Activities:</strong></h2>
-            </div>`
+            </div>`;
 			for (let i = 0; i < rhit.fbProfileManager.createdLength; i++) {
 				new rhit.FbActivityManager(rhit.fbProfileManager.createdIDAtIndex(i)).get().then((created) => {
-					console.log(created);
-					created.id = rhit.fbProfileManager.createdIDAtIndex(i)
-					document.getElementById("activities-container").appendChild(this._createCreatedCard(created))
-
+					created.id = rhit.fbProfileManager.createdIDAtIndex(i);
+					document.getElementById("activities-container").appendChild(this._createCreatedCard(created));
+				}).catch((err) => {
+					alert(err);
 				})
 			}
-			document.getElementById("activities-container").style.display = ""
+			document.getElementById("activities-container").style.display = "";
 		}
 	}
 
-	updateView() {
-		if (rhit.fbProfileManager.isSignedIn) {
-			document.getElementById("profile-name").innerHTML = rhit.fbProfileManager.name;
-			document.getElementById("new-name-field").value = ""
-			document.getElementById("logout-button").onclick = (event) => {
-				rhit.fbProfileManager.signOut();
-			}
-			document.getElementById("profile-dropdown").style.display = ""
-		} else {
-			window.location.href = "./index.html"
-		}
-	}
-
+	// Make an HTML element for history
 	_createHistoryCard(history) {
 		return htmlToElement(`<div class="mb-4">
 		<div class="row ml-3">
@@ -527,9 +667,10 @@ rhit.ProfilePageController = class {
 				<span class="fa fa-star ${history.rating >= 5 ? "checked" : ""}"></span>
 			</div>
 		</div>
-	</div>`)
+	</div>`);
 	}
 
+	// Make an HTML element for a created activity
 	_createCreatedCard(created) {
 		return htmlToElement(`<div class="mb-4">
 		<div class="row ml-3">
@@ -544,9 +685,10 @@ rhit.ProfilePageController = class {
 				<span class="fa fa-star ${created.rating >= 1 ? "checked" : ""}"></span>
 			</div>
 		</div>
-	</div>`)
+	</div>`);
 	}
 
+	// Make an HTML element for a review
 	_createReviewCard(review) {
 		return htmlToElement(`<div class="mb-4">
 		<div class="row ml-3">
@@ -564,75 +706,46 @@ rhit.ProfilePageController = class {
 		<div class="row">
 			<p class="ml-5">${review.text}</p>
 		</div>
-	</div>`)
+	</div>`);
 	}
 }
 
 rhit.LoginPageController = class {
 	constructor() {
 		if (rhit.fbProfileManager.isSignedIn) {
-			window.location.href = "./index.html"
+			// user cannot login while being logged in
+			window.location.href = "./index.html";
 			return;
 		}
 
 		$("#createAccountModal").on("show.bs.modal", (e) => {
+			// fill in email field if user already typed in email
 			document.getElementById("create-email-field").value = document.getElementById("login-email-field").value;
-		})
+		});
 
 		document.getElementById("login-button").onclick = (event) => {
+			//Login the user
 			const email = document.getElementById("login-email-field").value;
 			const password = document.getElementById("login-password-field").value;
 
-			if (!email) {
-				alert("Please enter an email")
-				return;
-			}
-			if (!password) {
-				alert("Please enter a password")
-				return;
-			}
 			rhit.fbProfileManager.signIn(email, password).then(() => {
-				window.location.href = "./index.html"
+				window.location.href = "./index.html";
 			}).catch((error) => {
-				const errorCode = error.code;
-				const errorMessage = error.message
-
-				console.log("Existing account log in error", errorCode, errorMessage);
-				alert("Unable to log you in. Is your username and password correct?")
+				alert(error);
 			});
 		}
 
 		document.getElementById("create-account-button").onclick = (event) => {
+			// User tries to create an account
 			const username = document.getElementById("create-username-field").value;
 			const email = document.getElementById("create-email-field").value;
 			const password1 = document.getElementById("create-password-field").value;
 			const password2 = document.getElementById("create-second-password-field").value;
 
-			if (password1 !== password2) {
-				alert("Passwords do not match!")
-				return;
-			}
-
-			if (!password1 || !password2) {
-				alert("A password is required")
-				return;
-			}
-
-			if (!email) {
-				alert("Please enter a valid email.")
-				return;
-			}
-
-			if (!username) {
-				alert("Please enter a valid username")
-				return;
-			}
-
-			rhit.fbProfileManager.createAccount(email, password1, username).then(() => {
-				window.location.href = "./index.html"
+			rhit.fbProfileManager.createAccount(email, password1, password2, username).then(() => {
+				window.location.href = "./index.html";
 			}).catch((error) => {
-				console.log("error creating account", error);
-				alert("There was an error creating your account")
+				alert(error);
 			})
 		}
 	}
@@ -640,161 +753,232 @@ rhit.LoginPageController = class {
 
 rhit.FbReviewManager = class {
 	constructor(reviewID) {
-		this._review = {}
-		this._reviewRef = firebase.firestore().collection(rhit.FB_COLLECTION_REVIEWS).doc(reviewID)
+		this._review = {}; // Object with review
+		this._reviewRef = firebase.firestore().collection(rhit.FB_COLLECTION_REVIEWS).doc(reviewID); // Reference to the review
 	}
+
+	// Get review one time
 	get() {
 		return new Promise((resolve, reject) => {
+			// Get the review
 			this._reviewRef.get().then((reviewDoc) => {
-				this._review.value = reviewDoc.get(rhit.FB_KEY_REVIEW_VALUE)
-				this._review.text = reviewDoc.get(rhit.FB_KEY_REVIEW_TEXT)
-
+				//Save data
+				this._review.value = reviewDoc.get(rhit.FB_KEY_REVIEW_VALUE);
+				this._review.text = reviewDoc.get(rhit.FB_KEY_REVIEW_TEXT);
+				//Get the activity related to the review
 				firebase.firestore().collection(rhit.FB_COLLECTION_ACTIVITIES).doc(reviewDoc.get(rhit.FB_KEY_REVIEW_ACTIVITY)).get().then((activityDoc) => {
-					this._review.activitySnapshot = activityDoc
+					//save data
+					this._review.activitySnapshot = activityDoc;
+					//Get the user related to the activity
 					firebase.firestore().collection(rhit.FB_COLLECTION_USERS).doc(reviewDoc.get(rhit.FB_KEY_REVIEW_AUTHOR)).get().then((authorDoc) => {
-						this._review.author = authorDoc.get(rhit.FB_KEY_NAME)
+						//Save the author
+						this._review.author = authorDoc.get(rhit.FB_KEY_NAME);
+						//Resolve with the data
 						resolve({
 							author: this.author,
 							stars: this.stars,
 							text: this.text,
 							activity: this.activity,
 							activityID: this.activityID
-						})
+						});
 					}).catch((error) => {
-						reject(error)
+						//err
+						console.log(error);
+						reject("There was an error getting the author of the review");
 					})
 				}).catch((er) => {
-					reject(er)
+					//err
+					console.log(er);
+					reject("There was an error getting the reviewed activity");
 				})
 			}).catch((err) => {
+				//err
 				console.log(err);
-				reject(err)
+				reject("There was an error getting the review");
 			})
 		})
 	}
 
+	// get the review author
 	get author() {
-		return this._review.author
+		return this._review.author;
 	}
+
+	// get the review stars
 	get stars() {
 		return this._review.value;
 	}
+
+	// get the reviews text
 	get text() {
-		return this._review.text
+		return this._review.text;
 	}
+
+	// get the activity
 	get activity() {
-		return this._review.activitySnapshot.get(rhit.FB_KEY_ACTIVITY)
+		return this._review.activitySnapshot.get(rhit.FB_KEY_ACTIVITY);
 	}
+
+	// get the id of the activity
 	get activityID() {
-		return this._review.activitySnapshot.id
+		return this._review.activitySnapshot.id;
 	}
 }
 
 rhit.FbActivityManager = class {
 	constructor(id) {
-		this.id = id
-		this._documentSnapshot = {};
-		this._reviews = []
-		this._unsubscribe = null;
-		this._ref = firebase.firestore().collection(rhit.FB_COLLECTION_ACTIVITIES).doc(id)
-		this._reviewRef = firebase.firestore().collection(rhit.FB_COLLECTION_REVIEWS)
+		this.id = id; //save the ID
+		this._documentSnapshot = {}; //save document snapshot
+		this._reviews = []; //save reviews
+		this._ref = firebase.firestore().collection(rhit.FB_COLLECTION_ACTIVITIES).doc(id); // reference to activity
+		this._reviewRef = firebase.firestore().collection(rhit.FB_COLLECTION_REVIEWS); //reference to review collection
 	}
+
 	beginListening(changeListener) {
-		this._unsubscribe = this._ref.onSnapshot((doc) => {
+		// listen to changes to the activity
+		this._ref.onSnapshot((doc) => {
 			if (doc.exists) {
 				this._documentSnapshot = doc;
-				console.log(doc.data());
 			} else {
-				console.log("No such document!");
+				this._documentSnapshot = null;
 			}
 			changeListener()
 		})
 	}
+
 	beginReviewsListening(changeListener) {
+		//listen to new reviews
 		this._reviewRef.where(rhit.FB_KEY_REVIEW_ACTIVITY, "==", this.id).onSnapshot((reviews) => {
 			this._reviews = reviews.docs;
 			changeListener();
 		})
 	}
 
+	//gte the activity once
 	get() {
 		return new Promise((resolve, reject) => {
+			//get the activity ref
 			this._ref.get().then((doc) => {
+				//save activity
 				const activity = doc.data();
+				//get the reviews related to the activity
 				this._reviewRef.where(rhit.FB_KEY_REVIEW_ACTIVITY, "==", this.id).get().then((reviews) => {
-					activity.numReviews = reviews.docs.length
-					activity.rating = 0
+					//save data
+					activity.numReviews = reviews.docs.length;
+					//calculate the rating
+					activity.rating = 0;
 					if (activity.numReviews > 0) {
 						reviews.docs.forEach(review => {
-							activity.rating += review.get(rhit.FB_KEY_REVIEW_VALUE)
+							activity.rating += review.get(rhit.FB_KEY_REVIEW_VALUE);
 						});
-						activity.rating /= activity.numReviews
+						activity.rating /= activity.numReviews;
 					}
 
-					resolve(activity)
+					resolve(activity);
 				}).catch((err) => {
-					reject(err)
+					console.log(err);
+					reject("Error getting activity reviews");
 				})
 			}).catch((err) => {
-				reject(err)
+				console.log(err);
+				reject("Error getting the activity");
 			})
 		})
 	}
 
-	stopListening() {
-		this._unsubscribe();
-	}
-
+	//Add a review to the activity
 	addReview(value, text) {
-		return this._reviewRef.add({
-			[rhit.FB_KEY_REVIEW_ACTIVITY]: this.id,
-			[rhit.FB_KEY_REVIEW_AUTHOR]: rhit.fbProfileManager.uid,
-			[rhit.FB_KEY_REVIEW_TEXT]: text,
-			[rhit.FB_KEY_REVIEW_VALUE]: value
+		return new Promise((resolve, reject) => {
+			text = text.replace(/\r?\n|\r/g, ""); //Trim
+
+			// validate
+			if (!value || value < 1 || value > 5) {
+				reject("Please provide a valid rating");
+				return;
+			}
+
+			//Add the review
+			this._reviewRef.add({
+				[rhit.FB_KEY_REVIEW_ACTIVITY]: this.id,
+				[rhit.FB_KEY_REVIEW_AUTHOR]: rhit.fbProfileManager.uid,
+				[rhit.FB_KEY_REVIEW_TEXT]: text,
+				[rhit.FB_KEY_REVIEW_VALUE]: value,
+				[rhit.FB_KEY_REVIEW_TIME]: firebase.firestore.Timestamp.now()
+			}).then((reviewRef) => {
+				resolve(reviewRef);
+			}).catch((err) => {
+				console.log(err);
+				reject("Error adding your review");
+			})
 		})
 	}
 
+	//Check if the user has reviewed
 	hasUserReviewed() {
 		return new Promise((resolve, reject) => {
+			//Get the users review
 			this._reviewRef.where(rhit.FB_KEY_REVIEW_ACTIVITY, "==", this.id).where(rhit.FB_KEY_REVIEW_AUTHOR, "==", rhit.fbProfileManager.uid).get().then((docSnapshots) => {
-				resolve(docSnapshots.docs.length >= 1)
+				//if the num of docs is more than 0
+				resolve(docSnapshots.docs.length >= 1);
 			}).catch((err) => {
-				reject(err)
+				console.log(err);
+				reject("There was an error verifying if you have reviewed this activity before");
 			})
 		})
 
 	}
 
+	// get if the activity exists
+	get exists() {
+		return new Promise((resolve, reject) => {
+			// get the activity
+			this._ref.get().then((docSnap) => {
+				resolve(docSnap.exists); //resolve if it exists
+			}).catch((err) => {
+				console.log(err);
+				reject("Error getting activity");
+			})
+		})
+	}
+
+	// get the activity
 	get activity() {
-		return this._documentSnapshot.get(rhit.FB_KEY_ACTIVITY)
+		return this._documentSnapshot.get(rhit.FB_KEY_ACTIVITY);
 	}
 
+	// Get the activity type
 	get type() {
-		return this._documentSnapshot.get(rhit.FB_KEY_TYPE)
+		return this._documentSnapshot.get(rhit.FB_KEY_TYPE);
 	}
 
+	// Get the activity participants
 	get participants() {
-		return this._documentSnapshot.get(rhit.FB_KEY_PARTICPANTS)
+		return this._documentSnapshot.get(rhit.FB_KEY_PARTICPANTS);
 	}
 
+	// get the activities availability
 	get availability() {
-		return this._documentSnapshot.get(rhit.FB_KEY_AVAILABILITY)
+		return this._documentSnapshot.get(rhit.FB_KEY_AVAILABILITY);
 	}
 
+	// Get the activities duration
 	get duration() {
-		return this._documentSnapshot.get(rhit.FB_KEY_DURATION)
+		return this._documentSnapshot.get(rhit.FB_KEY_DURATION);
 	}
 
+	// Get the activities number reviews
 	get numReviews() {
 		return this._reviews.length;
 	}
 
+	// Get the review at index
 	getReviewIDAtIndex(index) {
 		const review = this._reviews[index]
 		if (!review) throw new Error("Index out of range")
 		return review.id;
 	}
 
+	// Get the overall rating
 	get rating() {
 		let rating = 0;
 		if (this.numReviews > 0) {
@@ -810,88 +994,105 @@ rhit.FbActivityManager = class {
 rhit.ActivityPageController = class {
 	constructor() {
 		if (rhit.fbProfileManager.isSignedIn) {
-			document.getElementById("login-button").style.display = "none"
-			document.getElementById("profile-name").innerHTML = rhit.fbProfileManager.name;
+			//hide login button and enable logout button
+			document.getElementById("login-button").style.display = "none";
 			document.getElementById("logout-button").onclick = (event) => {
-				rhit.fbProfileManager.signOut();
+				rhit.fbProfileManager.signOut().catch((err) => {
+					alert(err);
+				})
 			}
-			document.getElementById("profile-dropdown").style.display = ""
 		} else {
-			document.getElementById("profile-dropdown").style.display = "none"
-			document.getElementById("login-button").style.display = ""
+			//hide profile, show login button
+			document.getElementById("profile-dropdown").style.display = "none";
+			document.getElementById("login-button").style.display = "";
 		}
-		rhit.fbActivityManager.beginListening(this.updateView.bind(this))
-		rhit.fbActivityManager.beginReviewsListening(this.updateReviews.bind(this))
+
+		rhit.fbActivityManager.beginListening(this.updateView.bind(this));
+		rhit.fbActivityManager.beginReviewsListening(this.updateReviews.bind(this));
+		rhit.fbProfileManager.beginUsernameListening(this.updateDisplayName.bind(this));
 	}
 
+	// update name
+	updateDisplayName() {
+		document.getElementById("profile-name").innerHTML = rhit.fbProfileManager.name;
+		document.getElementById("profile-dropdown").style.display = "";
+	}
+
+	// Update activity
 	updateView() {
 		document.getElementById("activity-title").innerHTML = rhit.fbActivityManager.activity;
-		document.getElementById("type").innerHTML = `Type: ${rhit.fbActivityManager.type}`
-		document.getElementById("participants").innerHTML = `Participants: ${rhit.fbActivityManager.participants}`
+		document.getElementById("type").innerHTML = `Type: ${rhit.fbActivityManager.type}`;
+		document.getElementById("participants").innerHTML = `Participants: ${rhit.fbActivityManager.participants}`;
 	}
 
+	// Show review
 	updateReviews() {
 		rhit.fbActivityManager.hasUserReviewed().then((reviewed) => {
+			//decide if to show review button
 			if (reviewed) {
-				document.getElementById("review-button").style.display = "none"
+				document.getElementById("review-button").style.display = "none";
 			} else {
-				document.getElementById("review-button").href = `./review.html?id=${rhit.fbActivityManager.id}`
-				document.getElementById("review-button").style.display = ""
+				document.getElementById("review-button").href = `./review.html?id=${rhit.fbActivityManager.id}`;
+				document.getElementById("review-button").style.display = "";
 			}
 		})
 
+		// display number of reviews
 		if (rhit.fbActivityManager.numReviews < 1) {
-			document.getElementById("review-header").innerHTML = `Nobody has reviewed this activity`
+			document.getElementById("review-header").innerHTML = `Nobody has reviewed this activity`;
 
 		} else {
-			document.getElementById("review-header").innerHTML = `Based on ${rhit.fbActivityManager.numReviews} ${rhit.fbActivityManager.numReviews == 1 ? "review": "reviews"}`
+			document.getElementById("review-header").innerHTML = `Based on ${rhit.fbActivityManager.numReviews} ${rhit.fbActivityManager.numReviews == 1 ? "review": "reviews"}`;
 		}
-		//rhit.fbActivityManager.rating
-		//rhit.fbActivityManager.getReviewIDAtIndex(index)
-		const oneStar = document.getElementById("1-star")
-		const twoStar = document.getElementById("2-star")
-		const threeStar = document.getElementById("3-star")
-		const fourStar = document.getElementById("4-star")
-		const fiveStar = document.getElementById("5-star")
-		oneStar.classList.remove("checked")
-		twoStar.classList.remove("checked")
-		threeStar.classList.remove("checked")
-		fourStar.classList.remove("checked")
-		fiveStar.classList.remove("checked")
+		
+		//Get stars
+		const oneStar = document.getElementById("1-star");
+		const twoStar = document.getElementById("2-star");
+		const threeStar = document.getElementById("3-star");
+		const fourStar = document.getElementById("4-star");
+		const fiveStar = document.getElementById("5-star");
+		//uncheck all stars
+		oneStar.classList.remove("checked");
+		twoStar.classList.remove("checked");
+		threeStar.classList.remove("checked");
+		fourStar.classList.remove("checked");
+		fiveStar.classList.remove("checked");
 
+		// check right stars
 		switch (rhit.fbActivityManager.rating) {
 			case 5:
-				fiveStar.classList.add("checked")
+				fiveStar.classList.add("checked");
 			case 4:
-				fourStar.classList.add("checked")
+				fourStar.classList.add("checked");
 			case 3:
-				threeStar.classList.add("checked")
+				threeStar.classList.add("checked");
 			case 2:
-				twoStar.classList.add("checked")
+				twoStar.classList.add("checked");
 			case 1:
-				oneStar.classList.add("checked")
+				oneStar.classList.add("checked");
 		}
 
+		// show reviews
 		if (rhit.fbActivityManager.numReviews < 1) {
-			document.getElementById("reviews-container").style.display = "none"
+			document.getElementById("reviews-container").style.display = "none";
 		} else {
 			document.getElementById("reviews-container").innerHTML = `<div class="row ml-1">
 			<h2 class="mt-2"><strong>Reviews:</strong></h2>
-		</div>`
+		</div>`;
 
 			for (let i = 0; i < rhit.fbActivityManager.numReviews; i++) {
 				new rhit.FbReviewManager(rhit.fbActivityManager.getReviewIDAtIndex(i)).get().then((review) => {
-					document.getElementById("reviews-container").appendChild(this._createReviewCard(review))
+					document.getElementById("reviews-container").appendChild(this._createReviewCard(review));
 				}).catch((err) => {
-					console.error(err)
+					alert(err);
 				})
 			}
 
-			document.getElementById("reviews-container").style.display = ""
-
+			document.getElementById("reviews-container").style.display = "";
 		}
 	}
 
+	//make html element of review
 	_createReviewCard(review) {
 		return htmlToElement(`<div class="mb-4">
 		<div class="row ml-3">
@@ -909,65 +1110,98 @@ rhit.ActivityPageController = class {
 		<div class="row">
 			<p class="ml-5">${review.text}</p>
 		</div>
-	</div>`)
+	</div>`);
 	}
 }
 
 rhit.FbActivitiesManager = class {
 	constructor() {
-		this._ref = firebase.firestore().collection(rhit.FB_COLLECTION_ACTIVITIES);
+		this._ref = firebase.firestore().collection(rhit.FB_COLLECTION_ACTIVITIES); //reference to activity collection
 	}
 
+	//Get an activity
 	getRandomActivity(type, participants, access, duration) {
 		return new Promise((resolve, reject) => {
-			console.log('type :>> ', type);
-			console.log('participants :>> ', participants);
-			console.log('access :>> ', access);
-			console.log('duration :>> ', duration);
-			let allowedAccess = []
-			let allowedDurations = []
-			switch(access) {
-				case "Major challenges":
-					allowedAccess.push("Major chalenges")
-				case "Minor challenges":
-					allowedAccess.push("Minor challenges")
-				case "Few to no challenges":
-					allowedAccess.push("Few to no challenges")
-			}
-			switch(duration) {
-				case "weeks":
-					allowedDurations.push("weeks")
-				case "days":
-					allowedDurations.push("days")
-				case "hours":
-					allowedDurations.push("hours")
-				case "minutes":
-					allowedDurations.push("minutes")
-			}
-			let query = this._ref.where(rhit.FB_KEY_PARTICPANTS, ">=", participants).where(rhit.FB_KEY_DURATION, "in", allowedDurations)
-			//.where(rhit.FB_KEY_AVAILABILITY, "in", allowedAccess)
-			if (type != "any") {
-				query = query.where(rhit.FB_KEY_TYPE, "==", type)
+			if (participants < 1) {
+				reject("Please select a valid number of participants");
+				return;
 			}
 
+			if (!type || !rhit.validTypes.includes(type)) {
+				reject("Please select a valid type");
+				return;
+			}
+
+			if (!access || !rhit.validAccess.includes(access)) {
+				reject("Please select a valid maximum accessibility");
+				return;
+			}
+
+			if (!duration || !rhit.validDuration.includes(duration)) {
+				reject("Please select a valid duration");
+				return;
+			}
+
+			let allowedAccess = [];
+			let allowedDurations = [];
+
+			// add what alloewd access
+			switch (access) {
+				case "Major challenges":
+					allowedAccess.push("Major chalenges");
+				case "Minor challenges":
+					allowedAccess.push("Minor challenges");
+				case "Few to no challenges":
+					allowedAccess.push("Few to no challenges");
+			}
+
+			// add allowed duration
+			switch (duration) {
+				case "weeks":
+					allowedDurations.push("weeks");
+				case "days":
+					allowedDurations.push("days");
+				case "hours":
+					allowedDurations.push("hours");
+				case "minutes":
+					allowedDurations.push("minutes");
+			}
+
+			//Build query
+			let query = this._ref.where(rhit.FB_KEY_PARTICPANTS, ">=", participants).where(rhit.FB_KEY_DURATION, "in", allowedDurations);
+
+			//if not type any add filter for that type
+			if (type != "any") {
+				query = query.where(rhit.FB_KEY_TYPE, "==", type);
+			}
+
+			// get query
 			query.get().then((querySnapshots) => {
-				const possibleSnapshots = []
+				//save filtered
+				const possibleSnapshots = [];
+				//check for correct access (can't do 2 "in" queries at a time)
 				querySnapshots.forEach(doc => {
-					if (allowedAccess.includes(doc.data()[rhit.FB_KEY_AVAILABILITY])) possibleSnapshots.push(doc.id)
+					if (allowedAccess.includes(doc.data()[rhit.FB_KEY_AVAILABILITY])) possibleSnapshots.push(doc.id); //if alloewd access
 				});
-				console.log(possibleSnapshots);
+
+				//if no activity
 				if (possibleSnapshots.length < 1) {
-					reject("No activity could be found! Try a broader search")
+					reject("No activity could be found! Try a broader search");
+					return;
 				}
+
+				// get a random one
 				const activityID = possibleSnapshots[Math.floor(Math.random() * possibleSnapshots.length)];
+
+				// add to history
 				rhit.fbProfileManager.addToHistory(activityID).then(() => {
-					resolve(activityID)
+					resolve(activityID);
 				}).catch((err) => {
 					console.log(err);
-					reject("Error adding activity to history!")
+					reject("Error adding activity to history!");
 				})
 			}).catch(function (error) {
-				console.log("Error with firestore ", error);
+				console.log(error);
 				reject("Error getting an activity")
 			});
 		})
@@ -976,72 +1210,68 @@ rhit.FbActivitiesManager = class {
 
 rhit.HomePageController = class {
 	constructor() {
+		//show logout, hide login button
 		if (rhit.fbProfileManager.isSignedIn) {
-			document.getElementById("login-button").style.display = "none"
-			document.getElementById("profile-name").innerHTML = rhit.fbProfileManager.name;
+			document.getElementById("login-button").style.display = "none";
 			document.getElementById("logout-button").onclick = (event) => {
-				rhit.fbProfileManager.signOut();
+				rhit.fbProfileManager.signOut().catch((err) => {
+					alert(err);
+				})
 			}
-			document.getElementById("profile-dropdown").style.display = ""
 		} else {
-			document.getElementById("profile-dropdown").style.display = "none"
-			document.getElementById("login-button").style.display = ""
+			//hide profile, show login
+			document.getElementById("profile-dropdown").style.display = "none";
+			document.getElementById("login-button").style.display = "";
 		}
+
+		//when activity button is clicked
 		document.getElementById("activity-button").onclick = (event) => {
 			const type = document.getElementById("type-select").value.toLowerCase();
 			const participants = parseInt(document.getElementById("participant-input").value);
 			const access = document.getElementById("access-select").value;
 			const duration = document.getElementById("duration-select").value;
-			if (participants < 1) {
-				alert("Please select a valid number of participants")
-				return;
-			}
-
-			if (!type || !rhit.validTypes.includes(type)) {
-				alert("Please select a valid type")
-				return;
-			}
-
-			if (!access || !rhit.validAccess.includes(access)) {
-				alert("Please select a valid maximum accessibility")
-				return;
-			}
-
-			if (!duration || !rhit.validDuration.includes(duration)) {
-				alert("Please select a valid duration")
-				return;
-			}
 
 			rhit.fbActivitiesManager.getRandomActivity(type, participants, access, duration).then((randomActivity) => {
-				window.location.href = `/activity.html?id=${randomActivity}`
+				window.location.href = `/activity.html?id=${randomActivity}`;
+				//redirect to activity
 			}).catch((error) => {
 				alert(error)
 			})
+
+			rhit.fbProfileManager.beginUsernameListening(this.updateDisplayName.bind(this));
 		}
+	}
+
+	updateDisplayName() {
+		document.getElementById("profile-name").innerHTML = rhit.fbProfileManager.name;
+		document.getElementById("profile-dropdown").style.display = "";
 	}
 }
 
 rhit.main = function () {
 	console.log("Ready");
-	const urlParams = new URLSearchParams(window.location.search)
-	rhit.fbProfileManager = new rhit.FbProfileManager()
+	//Get urlparams
+	const urlParams = new URLSearchParams(window.location.search);
+	//create profile manager
+	rhit.fbProfileManager = new rhit.FbProfileManager();
+	//listen for uth state updates
 	rhit.fbProfileManager.beginListening(() => {
-		if (rhit.fbProfileManager.creatingAccount) return;
+		if (rhit.fbProfileManager.creatingAccount) return; //if still creating account don't update
 		console.log("isSignedIn = ", rhit.fbProfileManager.isSignedIn);
-		if (document.getElementById("home-page")) {
-			rhit.fbActivitiesManager = new rhit.FbActivitiesManager()
-			rhit.homePageController = new rhit.HomePageController();
-		} else if (document.getElementById("activity-page")) {
-			rhit.fbActivityManager = new rhit.FbActivityManager(urlParams.get("id"))
-			rhit.activityPageController = new rhit.ActivityPageController();
-		} else if (document.getElementById("login-page")) {
-			rhit.loginPageController = new rhit.LoginPageController();
-		} else if (document.getElementById("profile-page")) {
-			rhit.profilePageController = new rhit.ProfilePageController();
-		} else if (document.getElementById("create-page")) {
-			rhit.createPageController = new rhit.CreatePageController();
-		} else if (document.getElementById("review-page")) {
-			rhit.reviewPageController = new rhit.ReviewPageController(urlParams.get("id"));
+		if (document.getElementById("home-page")) {		//if on the home page
+			rhit.fbActivitiesManager = new rhit.FbActivitiesManager(); //create activity manager
+			rhit.homePageController = new rhit.HomePageController(); //create home page controller
+		} else if (document.getElementById("activity-page")) { 		// if on activity page
+			rhit.fbActivityManager = new rhit.FbActivityManager(urlParams.get("id")); //create single activity manager ith ID
+			rhit.activityPageController = new rhit.ActivityPageController(); //create activity page controller
+		} else if (document.getElementById("login-page")) {		// if on login page
+			rhit.loginPageController = new rhit.LoginPageController(); //make login page controller
+		} else if (document.getElementById("profile-page")) { 	//if on profile page
+			rhit.profilePageController = new rhit.ProfilePageController(); //create profile page controller
+		} else if (document.getElementById("create-page")) { 	// if on create page
+			rhit.createPageController = new rhit.CreatePageController(); //create create page controller
+		} else if (document.getElementById("review-page")) { 	//if on review page
+			rhit.reviewPageController = new rhit.ReviewPageController(urlParams.get("id")); //create review page controller with review id
 		}
 	})
 };
