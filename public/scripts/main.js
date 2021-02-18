@@ -5,6 +5,7 @@ rhit.FB_COLLECTION_ACTIVITIES = "activities";
 rhit.FB_COLLECTION_HISTORY = "historys";
 rhit.FB_COLLECTION_REVIEWS = "reviews";
 rhit.FB_COLLECTION_USERS = "users";
+rhit.FB_COLLECTION_REPORTS = "reports";
 
 // Firestore data names
 rhit.FB_KEY_HISTORY = "history";
@@ -21,6 +22,10 @@ rhit.FB_KEY_REVIEW_VALUE = "value";
 rhit.FB_KEY_REVIEW_TIME = "createdAt"
 rhit.FB_KEY_NAME = "name";
 rhit.FB_KEY_CREATED = "createdAt"
+rhit.FB_KEY_REPORT_TEXT = "text"
+rhit.FB_KEY_REPORT_TYPE = "type"
+rhit.FB_KEY_REPORT_ID = "id"
+rhit.FB_KEY_REPORT_TIME = "timestamp"
 
 // Valid values for activity type, access and duration
 rhit.validTypes = ["any", "education", "recreational", "social", "diy", "charity", "cooking", "relaxation", "music", "busywork"];
@@ -857,6 +862,7 @@ rhit.FbActivityManager = class {
 		this._reviews = []; //save reviews
 		this._ref = firebase.firestore().collection(rhit.FB_COLLECTION_ACTIVITIES).doc(id); // reference to activity
 		this._reviewRef = firebase.firestore().collection(rhit.FB_COLLECTION_REVIEWS); //reference to review collection
+		this._reportRef = firebase.firestore().collection(rhit.FB_COLLECTION_REPORTS)
 	}
 
 	beginListening(changeListener) {
@@ -934,6 +940,25 @@ rhit.FbActivityManager = class {
 			}).catch((err) => {
 				console.log(err);
 				reject("Error adding your review");
+			})
+		})
+	}
+
+	addReport(text) {
+		return new Promise((resolve, reject) => {
+			text = text.replace(/\r?\n|\r/g, ""); //Trim
+
+			//Add the report
+			this._reportRef.add({
+				[rhit.FB_KEY_REPORT_ID]: this.id,
+				[rhit.FB_KEY_REPORT_TEXT]: text,
+				[rhit.FB_KEY_REPORT_TYPE]: "activity",
+				[rhit.FB_KEY_REPORT_TIME]: firebase.firestore.Timestamp.now()
+			}).then((reportRef) => {
+				resolve();
+			}).catch((err) => {
+				console.log(err);
+				reject("Error adding your report");
 			})
 		})
 	}
@@ -1030,6 +1055,15 @@ rhit.ActivityPageController = class {
 			//hide profile, show login button
 			document.getElementById("profile-dropdown").style.display = "none";
 			document.getElementById("login-button").style.display = "";
+		}
+
+		document.getElementById("report-button").onclick = () => {
+			const reportText = document.getElementById("report-text").value
+			rhit.fbActivityManager.addReport(reportText).then(() => {
+				alert("Report added.")
+			}).catch((err) => {
+				alert(err)
+			})
 		}
 
 		rhit.fbActivityManager.beginListening(this.updateView.bind(this));
