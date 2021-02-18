@@ -783,8 +783,10 @@ rhit.LoginPageController = class {
 
 rhit.FbReviewManager = class {
 	constructor(reviewID) {
+		this._reviewID = reviewID
 		this._review = {}; // Object with review
 		this._reviewRef = firebase.firestore().collection(rhit.FB_COLLECTION_REVIEWS).doc(reviewID); // Reference to the review
+		this._reportRef = firebase.firestore().collection(rhit.FB_COLLECTION_REPORTS)
 	}
 
 	// Get review one time
@@ -809,7 +811,8 @@ rhit.FbReviewManager = class {
 							stars: this.stars,
 							text: this.text,
 							activity: this.activity,
-							activityID: this.activityID
+							activityID: this.activityID,
+							id: this._reviewID
 						});
 					}).catch((error) => {
 						//err
@@ -827,6 +830,22 @@ rhit.FbReviewManager = class {
 				reject("There was an error getting the review");
 			})
 		})
+	}
+
+	addReport() {
+		return new Promise((resolve, reject) => {
+			this._reportRef.add({
+				[rhit.FB_KEY_REPORT_ID]: this._reviewID,
+				[rhit.FB_KEY_REPORT_TYPE]: "review",
+				[rhit.FB_KEY_REPORT_TIME]: firebase.firestore.Timestamp.now()
+			}).then((reportRef) => {
+				resolve();
+			}).catch((err) => {
+				console.log(err);
+				reject("Error adding your report");
+			})
+		})
+		
 	}
 
 	// get the review author
@@ -1151,6 +1170,14 @@ rhit.ActivityPageController = class {
 		}
 	}
 
+	_reportReview(id) {
+		new rhit.FbReviewManager(id).addReport().then(() => {
+			alert("Added your report.")
+		}).catch((err) => {
+			alert(err)
+		})
+	}
+
 	//make html element of review
 	_createReviewCard(review) {
 		return htmlToElement(`<div class="mb-4">
@@ -1167,10 +1194,13 @@ rhit.ActivityPageController = class {
 			</div>
 		</div>
 		<div class="row">
-			<p class="ml-5">${review.text}</p>
+			<p class="ml-5 col-8">${review.text}</p>
+			<a class="btn btn-outline-danger btn-sm col-2" type="button" onclick="rhit.activityPageController._reportReview('${review.id}')">Report</a>
 		</div>
 	</div>`);
 	}
+
+	
 }
 
 rhit.FbActivitiesManager = class {
