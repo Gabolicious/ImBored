@@ -6,6 +6,7 @@ rhit.FB_COLLECTION_HISTORY = "historys";
 rhit.FB_COLLECTION_REVIEWS = "reviews";
 rhit.FB_COLLECTION_USERS = "users";
 rhit.FB_COLLECTION_REPORTS = "reports";
+rhit.FB_COLLECTION_WORDS = "words";
 
 // Firestore data names
 rhit.FB_KEY_HISTORY = "history";
@@ -26,6 +27,7 @@ rhit.FB_KEY_REPORT_TEXT = "text"
 rhit.FB_KEY_REPORT_TYPE = "type"
 rhit.FB_KEY_REPORT_ID = "id"
 rhit.FB_KEY_REPORT_TIME = "timestamp"
+rhit.FB_KEY_WORDS = "words"
 
 // Valid values for activity type, access and duration
 rhit.validTypes = ["any", "education", "recreational", "social", "diy", "charity", "cooking", "relaxation", "music", "busywork"];
@@ -46,6 +48,28 @@ function htmlToElement(html) {
 	template.innerHTML = html;
 	return template.content.firstChild;
 };
+
+rhit.FbProfanityManager = class {
+	constructor(text) {
+		return new Promise((resolve, reject) => {
+			firebase.firestore().collection(rhit.FB_COLLECTION_WORDS).doc("bad").get().then((wordDoc) => {
+				const badWords = wordDoc.get(rhit.FB_KEY_WORDS).filter((word) => {
+					return new RegExp(`\\b${word.replace(/(\W)/g, '\\$1')}\\b`, 'gi').test(text);
+				})
+
+				if (badWords.length > 0) {
+					resolve(badWords)
+				} else {
+					resolve(false)
+				}
+			}).catch((err) => {
+				console.log(err);
+				reject("Unable to verify your text")
+			})
+		})
+
+	}
+}
 
 rhit.FbProfileManager = class {
 	constructor() {
@@ -132,14 +156,25 @@ rhit.FbProfileManager = class {
 				return;
 			}
 
-			this._userRef.set({
-				[rhit.FB_KEY_NAME]: name //update username
-			}).then(() => {
-				resolve(); //success
+			new rhit.FbProfanityManager(name).then((profanity) => {
+				if (profanity) {
+					reject(`Please remove the profanity from your name.`)
+					return;
+				} else {
+					this._userRef.set({
+						[rhit.FB_KEY_NAME]: name //update username
+					}).then(() => {
+						resolve(); //success
+					}).catch((err) => {
+						console.log(err); //log error
+						reject("Error updating username"); //return custom error message
+					})
+				}
 			}).catch((err) => {
-				console.log(err); //log error
-				reject("Error updating username"); //return custom error message
+				reject(err)
 			})
+
+
 		})
 	}
 
@@ -167,45 +202,54 @@ rhit.FbProfileManager = class {
 				return;
 			}
 
-			this.creatingAccount = true; //Set that currently creating account to prevent redirects
-
-			firebase.auth().createUserWithEmailAndPassword(email, password).then((userCredentials) => {
-				const user = userCredentials.user; //save credentials
-
-				//Create a new entry in user table to track username
-				firebase.firestore().collection(rhit.FB_COLLECTION_USERS).doc(user.uid).set({
-					[rhit.FB_KEY_NAME]: name
-				}).then(() => {
-					//success
-					firebase.firestore().collection(rhit.FB_COLLECTION_HISTORY).doc(user.uid).set({
-						[rhit.FB_KEY_HISTORY]: []
-					}).then(() => {
-						this.creatingAccount = false; //stop creating account
-						resolve();
-					}).catch((err) => {
-						this.creatingAccount = false;
-						console.log(err);
-						reject("Error creating your history")
-					})
-				}).catch((err) => {
-					//error
-					this.creatingAccount = false;
-					console.log(err);
-					reject("Error saving your username");
-				});
-			}).catch((error) => {
-				this.creatingAccount = false;
-				console.log(error);
-				if (error.code == "auth/email-already-in-use") {
-					reject("There is already an account related to that email!")
-				} else if (error.code == "auth/weak-password") {
-					reject("Your password is too weak, try a stronger password")
-				} else if (error.code == "auth/invalid-email") {
-					reject("Invalid email provided, try a different email.")
+			new rhit.FbProfanityManager(name).then((profanity) => {
+				if (profanity) {
+					reject("Please remove the profanity from your name.")
+					return;
 				} else {
-					reject("Error creating your account");
+					this.creatingAccount = true; //Set that currently creating account to prevent redirects
+
+					firebase.auth().createUserWithEmailAndPassword(email, password).then((userCredentials) => {
+						const user = userCredentials.user; //save credentials
+
+						//Create a new entry in user table to track username
+						firebase.firestore().collection(rhit.FB_COLLECTION_USERS).doc(user.uid).set({
+							[rhit.FB_KEY_NAME]: name
+						}).then(() => {
+							//success
+							firebase.firestore().collection(rhit.FB_COLLECTION_HISTORY).doc(user.uid).set({
+								[rhit.FB_KEY_HISTORY]: []
+							}).then(() => {
+								this.creatingAccount = false; //stop creating account
+								resolve();
+							}).catch((err) => {
+								this.creatingAccount = false;
+								console.log(err);
+								reject("Error creating your history")
+							})
+						}).catch((err) => {
+							//error
+							this.creatingAccount = false;
+							console.log(err);
+							reject("Error saving your username");
+						});
+					}).catch((error) => {
+						this.creatingAccount = false;
+						console.log(error);
+						if (error.code == "auth/email-already-in-use") {
+							reject("There is already an account related to that email!")
+						} else if (error.code == "auth/weak-password") {
+							reject("Your password is too weak, try a stronger password")
+						} else if (error.code == "auth/invalid-email") {
+							reject("Invalid email provided, try a different email.")
+						} else {
+							reject("Error creating your account");
+						}
+					});
 				}
-			});
+			}).catch((err) => {
+				reject(err)
+			})
 		})
 	}
 
@@ -430,21 +474,30 @@ rhit.FbProfileManager = class {
 				return;
 			}
 
-			//Add to activity collection
-			this._activityRef.add({
-				[rhit.FB_KEY_ACTIVITY]: name,
-				[rhit.FB_KEY_TYPE]: type,
-				[rhit.FB_KEY_AVAILABILITY]: access,
-				[rhit.FB_KEY_PARTICPANTS]: participants,
-				[rhit.FB_KEY_DURATION]: duration,
-				[rhit.FB_KEY_AUTHOR]: this.uid,
-				[rhit.FB_KEY_CREATED]: firebase.firestore.Timestamp.now()
-			}).then((docRef) => {
-				// Done
-				resolve(docRef);
+			new rhit.FbProfanityManager(name).then((profanity) => {
+				if (profanity) {
+					reject("Please remove the profanity from your activity title.")
+					return;
+				} else {
+					//Add to activity collection
+					this._activityRef.add({
+						[rhit.FB_KEY_ACTIVITY]: name,
+						[rhit.FB_KEY_TYPE]: type,
+						[rhit.FB_KEY_AVAILABILITY]: access,
+						[rhit.FB_KEY_PARTICPANTS]: participants,
+						[rhit.FB_KEY_DURATION]: duration,
+						[rhit.FB_KEY_AUTHOR]: this.uid,
+						[rhit.FB_KEY_CREATED]: firebase.firestore.Timestamp.now()
+					}).then((docRef) => {
+						// Done
+						resolve(docRef);
+					}).catch((err) => {
+						console.log(err);
+						reject("Error creating activity!");
+					})
+				}
 			}).catch((err) => {
-				console.log(err);
-				reject("Error creating activity!");
+				reject(err)
 			})
 		})
 	}
@@ -486,20 +539,31 @@ rhit.FbProfileManager = class {
 				return;
 			}
 
-			//Update to activity collection
-			this._activityRef.doc(id).update({
-				[rhit.FB_KEY_ACTIVITY]: name,
-				[rhit.FB_KEY_TYPE]: type,
-				[rhit.FB_KEY_AVAILABILITY]: access,
-				[rhit.FB_KEY_PARTICPANTS]: participants,
-				[rhit.FB_KEY_DURATION]: duration
-			}).then((docRef) => {
-				// Done
-				resolve();
-			}).catch((err) => {
-				console.log(err);
-				reject("Error updating activity!");
+			new rhit.FbProfanityManager(name).then((profanity) => {
+				if (profanity) {
+					reject("Please remove the profanity from the name.")
+					return;
+				} else {
+					//Update to activity collection
+					this._activityRef.doc(id).update({
+						[rhit.FB_KEY_ACTIVITY]: name,
+						[rhit.FB_KEY_TYPE]: type,
+						[rhit.FB_KEY_AVAILABILITY]: access,
+						[rhit.FB_KEY_PARTICPANTS]: participants,
+						[rhit.FB_KEY_DURATION]: duration
+					}).then((docRef) => {
+						// Done
+						resolve();
+					}).catch((err) => {
+						console.log(err);
+						reject("Error updating activity!");
+					})
+				}
+			}).catch((er) => {
+				reject(er)
 			})
+
+
 		})
 	}
 
@@ -1066,14 +1130,23 @@ rhit.FbReviewManager = class {
 
 	update(stars, text) {
 		return new Promise((resolve, reject) => {
-			this._reviewRef.update({
-				[rhit.FB_KEY_REVIEW_VALUE]: stars,
-				[rhit.FB_KEY_REVIEW_TEXT]: text
-			}).then(() => {
-				resolve()
+			new rhit.FbProfanityManager(text).then((profanity) => {
+				if (profanity) {
+					reject("Please remove the profanity from your review.")
+					return;
+				} else {
+					this._reviewRef.update({
+						[rhit.FB_KEY_REVIEW_VALUE]: stars,
+						[rhit.FB_KEY_REVIEW_TEXT]: text
+					}).then(() => {
+						resolve()
+					}).catch((err) => {
+						console.log(err);
+						alert("Error updating your review!")
+					})
+				}
 			}).catch((err) => {
-				console.log(err);
-				alert("Error updating your review!")
+				reject(err)
 			})
 		})
 	}
@@ -1191,19 +1264,25 @@ rhit.FbActivityManager = class {
 				reject("Please provide a valid rating");
 				return;
 			}
-
-			//Add the review
-			this._reviewRef.add({
-				[rhit.FB_KEY_REVIEW_ACTIVITY]: this.id,
-				[rhit.FB_KEY_REVIEW_AUTHOR]: rhit.fbProfileManager.uid,
-				[rhit.FB_KEY_REVIEW_TEXT]: text,
-				[rhit.FB_KEY_REVIEW_VALUE]: value,
-				[rhit.FB_KEY_REVIEW_TIME]: firebase.firestore.Timestamp.now()
-			}).then((reviewRef) => {
-				resolve(reviewRef);
-			}).catch((err) => {
-				console.log(err);
-				reject("Error adding your review");
+			new rhit.FbProfanityManager(text).then((profanity) => {
+				if (profanity) {
+					reject("Please remove the profanity in your review.")
+					return;
+				} else {
+					//Add the review
+					this._reviewRef.add({
+						[rhit.FB_KEY_REVIEW_ACTIVITY]: this.id,
+						[rhit.FB_KEY_REVIEW_AUTHOR]: rhit.fbProfileManager.uid,
+						[rhit.FB_KEY_REVIEW_TEXT]: text,
+						[rhit.FB_KEY_REVIEW_VALUE]: value,
+						[rhit.FB_KEY_REVIEW_TIME]: firebase.firestore.Timestamp.now()
+					}).then((reviewRef) => {
+						resolve(reviewRef);
+					}).catch((err) => {
+						console.log(err);
+						reject("Error adding your review");
+					})
+				}
 			})
 		})
 	}
@@ -1211,7 +1290,7 @@ rhit.FbActivityManager = class {
 	addReport(text) {
 		return new Promise((resolve, reject) => {
 			text = text.replace(/\r?\n|\r/g, ""); //Trim
-
+			// not checking for profanity because this is just going to be seen by admins
 			//Add the report
 			this._reportRef.add({
 				[rhit.FB_KEY_REPORT_ID]: this.id,
