@@ -900,7 +900,6 @@ rhit.ProfilePageController = class {
 				})
 			}
 		} else {
-			alert("You must be signed in to view your profile.")
 			window.location.href = "./";
 			return;
 		}
