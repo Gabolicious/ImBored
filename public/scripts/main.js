@@ -104,10 +104,6 @@ rhit.FbProfileManager = class {
 
 	//listen for username change
 	beginUsernameListening(changeListener) {
-		if (!this._userRef) {
-			changeListener();
-			return;
-		}
 		this._userRef.onSnapshot((docSnap) => {
 			if (this.deletingAccount) return;
 			this.displayName = docSnap.get(rhit.FB_KEY_NAME); //save displayName
@@ -864,6 +860,7 @@ rhit.ProfilePageController = class {
 			}
 		} else {
 			window.location.href = "./";
+			return;
 		}
 
 		// If user tries to change their name
@@ -1394,6 +1391,8 @@ rhit.ActivityPageController = class {
 					alert(err);
 				})
 			}
+			rhit.fbProfileManager.beginUsernameListening(this.updateDisplayName.bind(this));
+
 		} else {
 			//hide profile, show login button
 			document.getElementById("profile-dropdown").style.display = "none";
@@ -1411,7 +1410,6 @@ rhit.ActivityPageController = class {
 
 		rhit.fbActivityManager.beginListening(this.updateView.bind(this));
 		rhit.fbActivityManager.beginReviewsListening(this.updateReviews.bind(this));
-		rhit.fbProfileManager.beginUsernameListening(this.updateDisplayName.bind(this));
 	}
 
 	// update name
@@ -1429,15 +1427,18 @@ rhit.ActivityPageController = class {
 
 	// Show review
 	updateReviews() {
-		rhit.fbActivityManager.hasUserReviewed().then((reviewed) => {
-			//decide if to show review button
-			if (reviewed) {
-				document.getElementById("review-button").style.display = "none";
-			} else {
-				document.getElementById("review-button").href = `./review.html?id=${rhit.fbActivityManager.id}`;
-				document.getElementById("review-button").style.display = "";
-			}
-		})
+		if (rhit.fbProfileManager.isSignedIn) {
+			rhit.fbActivityManager.hasUserReviewed().then((reviewed) => {
+				//decide if to show review button
+				if (reviewed) {
+					document.getElementById("review-button").style.display = "none";
+				} else {
+					document.getElementById("review-button").href = `./review.html?id=${rhit.fbActivityManager.id}`;
+					document.getElementById("review-button").style.display = "";
+				}
+			})
+		}
+		
 
 		// display number of reviews
 		if (rhit.fbActivityManager.numReviews < 1) {
@@ -1631,6 +1632,7 @@ rhit.HomePageController = class {
 					alert(err);
 				})
 			}
+			rhit.fbProfileManager.beginUsernameListening(this.updateDisplayName.bind(this));
 		} else {
 			//hide profile, show login
 			document.getElementById("profile-dropdown").style.display = "none";
@@ -1652,7 +1654,6 @@ rhit.HomePageController = class {
 			})
 		}
 
-		rhit.fbProfileManager.beginUsernameListening(this.updateDisplayName.bind(this));
 	}
 
 	updateDisplayName() {
