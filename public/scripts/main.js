@@ -135,7 +135,7 @@ rhit.FbProfileManager = class {
 	}
 
 	// Create a new user account
-	createAccount(email, password, confirmPassword,  name) {
+	createAccount(email, password, confirmPassword, name) {
 		//return a promise
 		return new Promise((resolve, reject) => {
 			if (!password || !confirmPassword) {
@@ -157,7 +157,7 @@ rhit.FbProfileManager = class {
 				reject("Please enter a valid username");
 				return;
 			}
-			
+
 			this.creatingAccount = true; //Set that currently creating account to prevent redirects
 
 			firebase.auth().createUserWithEmailAndPassword(email, password).then((userCredentials) => {
@@ -296,6 +296,21 @@ rhit.FbProfileManager = class {
 		})
 	}
 
+	removeFromHistory(id) {
+		return new Promise((resolve, reject) => {
+			this._historyRef.update({
+					[rhit.FB_KEY_HISTORY]: firebase.firestore.FieldValue.arrayRemove(id)
+				})
+				.then(() => {
+					resolve()
+				})
+				.catch(function (error) {
+					console.error(error);
+					reject("There was an error removing that from your history")
+				});
+		})
+	}
+
 	// Create a new activity
 	createActivity(name, type, access, participants, duration) {
 		return new Promise((resolve, reject) => {
@@ -343,6 +358,60 @@ rhit.FbProfileManager = class {
 			}).catch((err) => {
 				console.log(err);
 				reject("Error creating activity!");
+			})
+		})
+	}
+
+	// Create a new activity
+	updateActivity(id, name, type, access, participants, duration) {
+		return new Promise((resolve, reject) => {
+			if (!this.isSignedIn) {
+				//Must be signed in
+				reject("You are not signed in!");
+				return;
+			}
+
+			if (!id) {
+				reject("No provided ID")
+				return;
+			}
+
+			if (!name) {
+				reject("Please provide a name")
+				return;
+			}
+			if (!type || !rhit.validTypes.includes(type)) {
+				reject("Please provide a valid type")
+				return;
+			}
+			if (!participants || participants < 1) {
+				reject("Please provide a valid number of participants")
+				return;
+			}
+
+			if (!access || !rhit.validAccess.includes(access)) {
+				reject("Please select a valid accessibility")
+				return;
+			}
+
+			if (!duration || !rhit.validDuration.includes(duration)) {
+				reject("Please select a valid duration")
+				return;
+			}
+
+			//Update to activity collection
+			this._activityRef.doc(id).update({
+				[rhit.FB_KEY_ACTIVITY]: name,
+				[rhit.FB_KEY_TYPE]: type,
+				[rhit.FB_KEY_AVAILABILITY]: access,
+				[rhit.FB_KEY_PARTICPANTS]: participants,
+				[rhit.FB_KEY_DURATION]: duration
+			}).then((docRef) => {
+				// Done
+				resolve();
+			}).catch((err) => {
+				console.log(err);
+				reject("Error updating activity!");
 			})
 		})
 	}
@@ -403,7 +472,9 @@ rhit.FbProfileManager = class {
 }
 
 rhit.ReviewPageController = class {
-	constructor(uid) {
+	constructor(urlParams) {
+		const uid = urlParams.get("id")
+		const edit = urlParams.get("edit")
 		if (rhit.fbProfileManager.isSignedIn) {
 			//if user is signed in add sign out button and show profile
 			document.getElementById("logout-button").onclick = (event) => {
@@ -418,58 +489,63 @@ rhit.ReviewPageController = class {
 			return;
 		}
 
-		if (!uid) {
+		if (!uid && !edit) {
 			alert("No activity provided");
 			window.location.href = "./index.html";
 			return;
 		}
 
-		this._activity = new rhit.FbActivityManager(uid); //make a new activity with the ID
-		this._activity.exists.then((exists) => {
-			if (!exists) {
-				alert("Invalid activity ID");
-				window.location.href = "./index.html";
-				return;
+		if (uid) {
+			this.reviewValue = 5; //Default review value
+			this._beginStarListening()
+			this._activity = new rhit.FbActivityManager(uid); //make a new activity with the ID
+			this._activity.exists.then((exists) => {
+				if (!exists) {
+					alert("Invalid activity ID");
+					window.location.href = "./index.html";
+					return;
+				}
+			}).catch((message) => {
+				alert(message);
+				window.location.href = "./index.html"
+			});
+
+			//listen for user submitting review
+			document.getElementById("submit-button").onclick = () => {
+				const reviewText = document.getElementById("review-text").value || "";
+
+				this._activity.addReview(this.reviewValue, reviewText).then((reviewRef) => {
+					//Redirect to reviewed activity
+					window.location.href = `./activity.html?id=${this._activity.id}`;
+				}).catch((err) => {
+					//Alert error
+					alert(err);
+				})
 			}
-		}).catch((message) => {
-			alert(message);
-			window.location.href = "./index.html"
-		});
 
-		this.reviewValue = 5; //Default review value
-
-		//Add click listeners to udpate review with
-		document.getElementById("1-star").onclick = (event) => {
-			this._updateReviewStars(1);
-		}
-		document.getElementById("2-star").onclick = (event) => {
-			this._updateReviewStars(2);
-		}
-		document.getElementById("3-star").onclick = (event) => {
-			this._updateReviewStars(3);
-		}
-		document.getElementById("4-star").onclick = (event) => {
-			this._updateReviewStars(4);
-		}
-		document.getElementById("5-star").onclick = (event) => {
-			this._updateReviewStars(5);
-		}
-
-		//listen for user submitting review
-		document.getElementById("submit-button").onclick = () => {
-			const reviewText = document.getElementById("review-text").value || "";
-
-			this._activity.addReview(this.reviewValue, reviewText).then((reviewRef) => {
-				//Redirect to reviewed activity
-				window.location.href = `./activity.html?id=${this._activity.id}`;
-			}).catch((err) => {
-				//Alert error
-				alert(err);
+			// Listen to activity changes (required to see if user has reviewed)
+			this._activity.beginListening(this.updateView.bind(this));
+		} else if (edit) {
+			const reviewManager = new rhit.FbReviewManager(edit)
+			reviewManager.get().then((review) => {
+				this.reviewValue = review.stars
+				this._updateReviewStars(review.stars)
+				this._beginStarListening()
+				document.getElementById("review-title").innerHTML = review.activity
+				document.getElementById("review-text").innerHTML = review.text;
+				document.getElementById("submit-button").innerHTML = "Update"
+				document.getElementById("submit-button").onclick = () => {
+					const reviewText = document.getElementById("review-text").value || "";
+					
+					reviewManager.update(this.reviewValue, reviewText).then(() => {
+						window.location.href = `./activity.html?id=${review.activityID}`
+					}).catch((err) => {
+						alert(err)
+					})
+				}
 			})
 		}
 
-		// Listen to activity changes (required to see if user has reviewed)
-		this._activity.beginListening(this.updateView.bind(this));
 		// Listen for username changes
 		rhit.fbProfileManager.beginUsernameListening(this.updateDisplayName.bind(this));
 	}
@@ -496,6 +572,25 @@ rhit.ReviewPageController = class {
 			alert(err);
 			window.location.href = "./index.html";
 		})
+	}
+
+	_beginStarListening() {
+		//Add click listeners to udpate review with
+		document.getElementById("1-star").onclick = (event) => {
+			this._updateReviewStars(1);
+		}
+		document.getElementById("2-star").onclick = (event) => {
+			this._updateReviewStars(2);
+		}
+		document.getElementById("3-star").onclick = (event) => {
+			this._updateReviewStars(3);
+		}
+		document.getElementById("4-star").onclick = (event) => {
+			this._updateReviewStars(4);
+		}
+		document.getElementById("5-star").onclick = (event) => {
+			this._updateReviewStars(5);
+		}
 	}
 
 	_updateReviewStars(val) {
@@ -533,7 +628,7 @@ rhit.ReviewPageController = class {
 }
 
 rhit.CreatePageController = class {
-	constructor() {
+	constructor(id) {
 		if (rhit.fbProfileManager.isSignedIn) {
 			//if user is signed in add log out and show profile
 			document.getElementById("logout-button").onclick = (event) => {
@@ -546,21 +641,56 @@ rhit.CreatePageController = class {
 			alert("You must be signed in to create an activity");
 			window.location.href = "./";
 		}
+		if (!id) {
+			//Handle create click
+			document.getElementById("create-button").onclick = (event) => {
+				const name = document.getElementById("new-activity-name-field").value;
+				const type = document.getElementById("type-select").value;
+				const participants = parseInt(document.getElementById("participant-input").value);
+				const access = document.getElementById("access-select").value;
+				const duration = document.getElementById("duration-select").value;
 
-		//Handle create click
-		document.getElementById("create-button").onclick = (event) => {
-			const name = document.getElementById("new-activity-name-field").value;
-			const type = document.getElementById("type-select").value;
-			const participants = parseInt(document.getElementById("participant-input").value);
-			const access = document.getElementById("access-select").value;
-			const duration = document.getElementById("duration-select").value;
+				rhit.fbProfileManager.createActivity(name, type, access, participants, duration).then((docRef) => {
+					window.location.href = `./activity.html?id=${docRef.id}`;
+				}).catch((err) => {
+					alert(err);
+				})
+			}
+		} else {
+			document.getElementById("page-title").innerHTML = "Edit Activity"
+			document.getElementById("create-button").innerHTML = "Update Activity"
+			new rhit.FbActivityManager(id).get().then((activity) => {
+				if (activity[rhit.FB_KEY_AUTHOR] != rhit.fbProfileManager.uid) {
+					alert("You are not the author of this activity")
+					window.location.href = "./"
+					return;
+				}
+				document.getElementById("new-activity-name-field").value = activity[rhit.FB_KEY_ACTIVITY];
+				document.getElementById("type-select").value = activity[rhit.FB_KEY_TYPE]
+				document.getElementById("access-select").value = activity[rhit.FB_KEY_AVAILABILITY]
+				document.getElementById("duration-select").value = activity[rhit.FB_KEY_DURATION]
+				document.getElementById("participant-input").value = activity[rhit.FB_KEY_PARTICPANTS]
 
-			rhit.fbProfileManager.createActivity(name, type, access, participants, duration).then((docRef) => {
-				window.location.href = `./activity.html?id=${docRef.id}`;
+				document.getElementById("create-button").onclick = (event) => {
+					const name = document.getElementById("new-activity-name-field").value;
+					const type = document.getElementById("type-select").value;
+					const participants = parseInt(document.getElementById("participant-input").value);
+					const access = document.getElementById("access-select").value;
+					const duration = document.getElementById("duration-select").value;
+
+					rhit.fbProfileManager.updateActivity(id, name, type, access, participants, duration).then((docRef) => {
+						window.location.href = `./activity.html?id=${id}`;
+					}).catch((err) => {
+						alert(err);
+					})
+				}
 			}).catch((err) => {
-				alert(err);
+				alert(err)
 			})
+
+
 		}
+
 
 		rhit.fbProfileManager.beginUsernameListening(this.updateDisplayName.bind(this));
 	}
@@ -597,7 +727,7 @@ rhit.ProfilePageController = class {
 		// If user tries to delete account
 		document.getElementById("delete-account-button").onclick = (event) => {
 			const pwd = document.getElementById("delete-password-field").value;
-
+			
 			rhit.fbProfileManager.deleteAccount(pwd).catch((err) => {
 				alert(err);
 			})
@@ -682,19 +812,28 @@ rhit.ProfilePageController = class {
 		}
 	}
 
+	_deleteHistory(id) {
+		rhit.fbProfileManager.removeFromHistory(id).catch((err) => {
+			alert(err)
+		})
+	}
+
 	// Make an HTML element for history
 	_createHistoryCard(history) {
 		return htmlToElement(`<div class="mb-4">
 		<div class="row ml-3">
-			<div class="col-7">
+			<div class="col-7 col-md-7">
 				<a class="h4" href="/activity.html?id=${history.id}"><strong>${history.activity}</strong></a>
 			</div>
-			<div class="col-5 mt-1">
+			<div class="col-5 col-md-3 mt-1">
 				<span class="fa fa-star ${history.rating >= 1 ? "checked" : ""}"></span>
 				<span class="fa fa-star ${history.rating >= 2 ? "checked" : ""}"></span>
 				<span class="fa fa-star ${history.rating >= 3 ? "checked" : ""}"></span>
 				<span class="fa fa-star ${history.rating >= 4 ? "checked" : ""}"></span>
 				<span class="fa fa-star ${history.rating >= 5 ? "checked" : ""}"></span>
+			</div>
+			<div class="col-5 col-md-2">
+				<button type="button" class="btn btn-sm btn-outline-danger" onclick="rhit.profilePageController._deleteHistory('${history.id}')">Delete</button>
 			</div>
 		</div>
 	</div>`);
@@ -704,15 +843,18 @@ rhit.ProfilePageController = class {
 	_createCreatedCard(created) {
 		return htmlToElement(`<div class="mb-4">
 		<div class="row ml-3">
-			<div class="col-7">
+			<div class="col-7 col-md-7">
 				<a class="h4" href="./activity.html?id=${created.id}"><strong>${created.activity}</strong></a>
 			</div>
-			<div class="col-5 mt-1">
+			<div class="col-5 col-md-3 mt-1">
 				<span class="fa fa-star ${created.rating >= 1 ? "checked" : ""}"></span>
 				<span class="fa fa-star ${created.rating >= 1 ? "checked" : ""}"></span>
 				<span class="fa fa-star ${created.rating >= 1 ? "checked" : ""}"></span>
 				<span class="fa fa-star ${created.rating >= 1 ? "checked" : ""}"></span>
 				<span class="fa fa-star ${created.rating >= 1 ? "checked" : ""}"></span>
+			</div>
+			<div class="col-5 col-md-2">
+				<a type="button" class="btn btn-sm btn-outline-primary" target="_blank" href="./create.html?edit=${created.id}">Edit</a>
 			</div>
 		</div>
 	</div>`);
@@ -722,15 +864,18 @@ rhit.ProfilePageController = class {
 	_createReviewCard(review) {
 		return htmlToElement(`<div class="mb-4">
 		<div class="row ml-3">
-			<div class="col-7">
+			<div class="col-7 col-md-7">
 				<a class="h4" href="./activity.html?id=${review.activityID}"><strong>${review.activity}</strong></a>
 			</div>
-			<div class="col-5 mt-1">
+			<div class="col-5 col-md-3 mt-1">
 				<span class="fa fa-star ${review.stars >= 1 ? "checked" : ""}"></span>
 				<span class="fa fa-star ${review.stars >= 2 ? "checked" : ""}"></span>
 				<span class="fa fa-star ${review.stars >= 3 ? "checked" : ""}"></span>
 				<span class="fa fa-star ${review.stars >= 4 ? "checked" : ""}"></span>
 				<span class="fa fa-star ${review.stars >= 5 ? "checked" : ""}"></span>
+			</div>
+			<div class="col-5 col-md-2">
+				<a type="button" class="btn btn-sm btn-outline-primary" target="_blank" href="./review.html?edit=${review.id}">Edit</a>
 			</div>
 		</div>
 		<div class="row">
@@ -832,6 +977,20 @@ rhit.FbReviewManager = class {
 		})
 	}
 
+	update(stars, text) {
+		return new Promise((resolve, reject) => {
+			this._reviewRef.update({
+				[rhit.FB_KEY_REVIEW_VALUE]: stars,
+				[rhit.FB_KEY_REVIEW_TEXT]: text
+			}).then(() => {
+				resolve()
+			}).catch((err) => {
+				console.log(err);
+				alert("Error updating your review!")
+			})
+		})
+	}
+
 	addReport() {
 		return new Promise((resolve, reject) => {
 			this._reportRef.add({
@@ -845,7 +1004,6 @@ rhit.FbReviewManager = class {
 				reject("Error adding your report");
 			})
 		})
-		
 	}
 
 	// get the review author
@@ -1122,7 +1280,7 @@ rhit.ActivityPageController = class {
 		} else {
 			document.getElementById("review-header").innerHTML = `Based on ${rhit.fbActivityManager.numReviews} ${rhit.fbActivityManager.numReviews == 1 ? "review": "reviews"}`;
 		}
-		
+
 		//Get stars
 		const oneStar = document.getElementById("1-star");
 		const twoStar = document.getElementById("2-star");
@@ -1200,7 +1358,7 @@ rhit.ActivityPageController = class {
 	</div>`);
 	}
 
-	
+
 }
 
 rhit.FbActivitiesManager = class {
@@ -1347,20 +1505,20 @@ rhit.main = function () {
 	rhit.fbProfileManager.beginListening(() => {
 		if (rhit.fbProfileManager.creatingAccount) return; //if still creating account don't update
 		console.log("isSignedIn = ", rhit.fbProfileManager.isSignedIn);
-		if (document.getElementById("home-page")) {		//if on the home page
+		if (document.getElementById("home-page")) { //if on the home page
 			rhit.fbActivitiesManager = new rhit.FbActivitiesManager(); //create activity manager
 			rhit.homePageController = new rhit.HomePageController(); //create home page controller
-		} else if (document.getElementById("activity-page")) { 		// if on activity page
+		} else if (document.getElementById("activity-page")) { // if on activity page
 			rhit.fbActivityManager = new rhit.FbActivityManager(urlParams.get("id")); //create single activity manager ith ID
 			rhit.activityPageController = new rhit.ActivityPageController(); //create activity page controller
-		} else if (document.getElementById("login-page")) {		// if on login page
+		} else if (document.getElementById("login-page")) { // if on login page
 			rhit.loginPageController = new rhit.LoginPageController(); //make login page controller
-		} else if (document.getElementById("profile-page")) { 	//if on profile page
+		} else if (document.getElementById("profile-page")) { //if on profile page
 			rhit.profilePageController = new rhit.ProfilePageController(); //create profile page controller
-		} else if (document.getElementById("create-page")) { 	// if on create page
-			rhit.createPageController = new rhit.CreatePageController(); //create create page controller
-		} else if (document.getElementById("review-page")) { 	//if on review page
-			rhit.reviewPageController = new rhit.ReviewPageController(urlParams.get("id")); //create review page controller with review id
+		} else if (document.getElementById("create-page")) { // if on create page
+			rhit.createPageController = new rhit.CreatePageController(urlParams.get("edit")); //create create page controller
+		} else if (document.getElementById("review-page")) { //if on review page
+			rhit.reviewPageController = new rhit.ReviewPageController(urlParams); //create review page controller with review id
 		}
 	})
 };
