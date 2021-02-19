@@ -464,7 +464,7 @@ rhit.FbProfileManager = class {
 				reject("Please provide a valid type")
 				return;
 			}
-			if (!participants || participants < 1) {
+			if (!participants || participants < 1 || participants > 10) {
 				reject("Please provide a valid number of participants")
 				return;
 			}
@@ -525,7 +525,7 @@ rhit.FbProfileManager = class {
 				reject("Please provide a valid type")
 				return;
 			}
-			if (!participants || participants < 1) {
+			if (!participants || participants < 1 || participants > 10) {
 				reject("Please provide a valid number of participants")
 				return;
 			}
@@ -1608,7 +1608,7 @@ rhit.FbActivitiesManager = class {
 	//Get an activity
 	getRandomActivity(type, participants, access, duration) {
 		return new Promise((resolve, reject) => {
-			if (participants < 1) {
+			if (participants < 1 || participants > 10) {
 				reject("Please select a valid number of participants");
 				return;
 			}

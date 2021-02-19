@@ -51,29 +51,30 @@
     </div>
     <div class="row justify-content-center">
       <div class="form-group" id="select-group">
-        <label for="access-select">Accessibility:</label>
-        <select class="form-control" id="access-select">
+        <label for="access-select">Max Challenge:</label>
+        <select class="form-control" id="access-select" aria-describedby="access-help">
           <option value="Few to no challenges">Few to no challenges</option>
           <option value="Minor challenges">Minor challenges</option>
-          <option value="Major challenges">Major challenges</option>
+          <option value="Major challenges">Any (Major challenges)</option>
         </select>
+        <small id="access-help" class="form-text text-muted text-center">What's the most difficult challenge you are ok with doing?</small>
       </div>
     </div>
     <div class="row justify-content-center">
       <div class="form-group" id="select-group">
         <label for="duration-select">Duration:</label>
         <select class="form-control" id="duration-select">
-          <option value="minutes">Minutes</option>
-          <option value="hours">Hours</option>
-          <option value="days">Days</option>
-          <option value="weeks">Weeks</option>
+          <option value="minutes">Less than an hour</option>
+          <option value="hours" selected>Less than a day</option>
+          <option value="days">Less than a week</option>
+          <option value="weeks">Less than a month</option>
         </select>
       </div>
     </div>
     <div class="row justify-content-center">
       <div class="form-group">
-        <label for="participant-input">Participants:</label>
-        <input type="number" class="form-control" id="participant-input" value="1" min="1" step="1">
+        <label for="participant-input">Minimum Participants:</label>
+        <input type="number" class="form-control" id="participant-input" value="1" min="1" step="1" max="10">
       </div>
     </div>
     <div class="row justify-content-center">
