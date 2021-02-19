@@ -49,6 +49,7 @@ function htmlToElement(html) {
 
 rhit.FbProfileManager = class {
 	constructor() {
+		this.deletingAccount = false;
 		this._user = null; //Track user object
 		this._historySnapshot = null; //History for the user
 		this._createdSnapshots = null; //User created activities
@@ -79,7 +80,12 @@ rhit.FbProfileManager = class {
 
 	//listen for username change
 	beginUsernameListening(changeListener) {
+		if (!this._userRef) {
+			changeListener();
+			return;
+		}
 		this._userRef.onSnapshot((docSnap) => {
+			if (this.deletingAccount) return;
 			this.displayName = docSnap.get(rhit.FB_KEY_NAME); //save displayName
 			changeListener(); //update
 		})
@@ -89,6 +95,7 @@ rhit.FbProfileManager = class {
 	beginCreatedListening(changeListener) {
 		//Get activitys made by current user and order from new to old
 		this._activityRef.where(rhit.FB_KEY_AUTHOR, "==", this.uid).orderBy(rhit.FB_KEY_CREATED, "desc").onSnapshot((docSnapshots) => {
+			if (this.deletingAccount) return;
 			this._createdSnapshots = docSnapshots.docs; //Save created docs
 
 			changeListener(); //update
@@ -98,6 +105,7 @@ rhit.FbProfileManager = class {
 	//listen for new activities in history
 	beginHistoryListening(changeListener) {
 		this._historyRef.onSnapshot((docSnapshot) => {
+			if (this.deletingAccount) return;
 			this._historySnapshot = docSnapshot.get(rhit.FB_KEY_HISTORY); //save history
 
 			changeListener(); //update
@@ -108,6 +116,7 @@ rhit.FbProfileManager = class {
 	beginReviewListening(changeListener) {
 		//Get reviews made by current user
 		this._reviewRef.where(rhit.FB_KEY_REVIEW_AUTHOR, "==", this.uid).orderBy(rhit.FB_KEY_REVIEW_TIME, "desc").onSnapshot((docSnapshots) => {
+			if (this.deletingAccount) return;
 			this._reviewSnapshots = docSnapshots.docs; //save reviews
 
 			changeListener(); //update
@@ -260,17 +269,95 @@ rhit.FbProfileManager = class {
 				password
 			)).then(() => {
 				//success
-				this._user.delete().then(() => {
-					//deleted
-					resolve();
+				console.log("Deleting history");
+				this.deletingAccount = true;
+				this._historyRef.delete().then(() => {
+					console.log("Deleting review");
+					this._deleteReviews().then(() => {
+						console.log("Deleting activitys");
+						this._deleteActivities().then(() => {
+							console.log("Deleting user name");
+							this._userRef.delete().then(() => {
+								console.log("Deleting user");
+								this._user.delete().then(() => {
+									//deleted
+									this.deletingAccount = false;
+									resolve();
+
+								}).catch((err) => {
+									this.deletingAccount = false;
+									console.log(err);
+									reject("Error deleting the users account");
+								})
+							}).catch((err) => {
+								this.deletingAccount = false;
+
+								console.log(err);
+								reject("Error deleting your user")
+							})
+
+						}).catch((err) => {
+							this.deletingAccount = false;
+
+							console.log(err);
+							reject("Error deleting your activities")
+						})
+					}).catch((err) => {
+						this.deletingAccount = false;
+
+						console.log(err);
+						reject("Error deleting your reviews")
+					})
 				}).catch((err) => {
-					console.log(err);
-					reject("Error deleting the users account");
+					this.deletingAccount = false;
+
+					console.log(err)
+					reject("Error deleting your history!")
 				})
+
+
 			}).catch((err) => {
 				//error
+				this.deletingAccount = false;
+
 				console.log(err);
 				reject("Error reauthenticating, is your password correct?");
+			})
+		})
+	}
+
+	_deleteReviews() {
+		return this._deleteReview(0)
+	}
+
+	_deleteReview(index) {
+		return new Promise((resolve, reject) => {
+			if (index >= this._reviewSnapshots.length) {
+				resolve()
+				return;
+			}
+			this._reviewRef.doc(this._reviewSnapshots[index].id).delete().then(() => {
+				resolve(this._deleteReview(index + 1))
+			}).catch((err) => {
+				reject(err)
+			})
+		})
+	}
+
+	_deleteActivities() {
+		return this._deleteActivity(0)
+	}
+
+	_deleteActivity(index) {
+		return new Promise((resolve, reject) => {
+			if (index >= this._createdSnapshots.length) {
+				resolve()
+				return;
+			}
+			this._activityRef.doc(this._createdSnapshots[index].id).delete().then(() => {
+				resolve(this._deleteActivity(index + 1))
+			}).catch((err) => {
+				reject(err)
 			})
 		})
 	}
@@ -536,7 +623,7 @@ rhit.ReviewPageController = class {
 				document.getElementById("submit-button").innerHTML = "Update"
 				document.getElementById("submit-button").onclick = () => {
 					const reviewText = document.getElementById("review-text").value || "";
-					
+
 					reviewManager.update(this.reviewValue, reviewText).then(() => {
 						window.location.href = `./activity.html?id=${review.activityID}`
 					}).catch((err) => {
@@ -727,7 +814,7 @@ rhit.ProfilePageController = class {
 		// If user tries to delete account
 		document.getElementById("delete-account-button").onclick = (event) => {
 			const pwd = document.getElementById("delete-password-field").value;
-			
+
 			rhit.fbProfileManager.deleteAccount(pwd).catch((err) => {
 				alert(err);
 			})
