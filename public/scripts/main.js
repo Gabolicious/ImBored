@@ -1510,7 +1510,7 @@ rhit.ActivityPageController = class {
 				}
 			})
 		}
-		
+
 
 		// display number of reviews
 		if (rhit.fbActivityManager.numReviews < 1) {
