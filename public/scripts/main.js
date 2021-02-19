@@ -152,6 +152,10 @@ rhit.FbProfileManager = class {
 				return;
 			}
 
+			if (name.length > 12) {
+				reject("Please shorten your nickname")
+				return;
+			}
 			new rhit.FbProfanityManager(name).then((profanity) => {
 				if (profanity) {
 					reject(`Please remove the profanity from your name.`)
@@ -195,6 +199,11 @@ rhit.FbProfileManager = class {
 
 			if (!name) {
 				reject("Please enter a valid username");
+				return;
+			}
+
+			if (name.length > 12) {
+				reject("Please shorten your nickname")
 				return;
 			}
 
@@ -499,7 +508,7 @@ rhit.FbProfileManager = class {
 	}
 
 	// Create a new activity
-	updateActivity(id, name, type, access, participants, duration) {
+	updateActivity(id, type, access, participants, duration) {
 		return new Promise((resolve, reject) => {
 			if (!this.isSignedIn) {
 				//Must be signed in
@@ -512,10 +521,6 @@ rhit.FbProfileManager = class {
 				return;
 			}
 
-			if (!name) {
-				reject("Please provide a name")
-				return;
-			}
 			if (!type || !rhit.validTypes.includes(type)) {
 				reject("Please provide a valid type")
 				return;
@@ -535,31 +540,45 @@ rhit.FbProfileManager = class {
 				return;
 			}
 
-			new rhit.FbProfanityManager(name).then((profanity) => {
-				if (profanity) {
-					reject("Please remove the profanity from the name.")
-					return;
-				} else {
-					//Update to activity collection
-					this._activityRef.doc(id).update({
-						[rhit.FB_KEY_ACTIVITY]: name,
-						[rhit.FB_KEY_TYPE]: type,
-						[rhit.FB_KEY_AVAILABILITY]: access,
-						[rhit.FB_KEY_PARTICPANTS]: participants,
-						[rhit.FB_KEY_DURATION]: duration
-					}).then((docRef) => {
-						// Done
-						resolve();
-					}).catch((err) => {
-						console.log(err);
-						reject("Error updating activity!");
-					})
-				}
-			}).catch((er) => {
-				reject(er)
+			//Update to activity collection
+			this._activityRef.doc(id).update({
+				[rhit.FB_KEY_TYPE]: type,
+				[rhit.FB_KEY_AVAILABILITY]: access,
+				[rhit.FB_KEY_PARTICPANTS]: participants,
+				[rhit.FB_KEY_DURATION]: duration
+			}).then((docRef) => {
+				// Done
+				resolve();
+			}).catch((err) => {
+				console.log(err);
+				reject("Error updating activity!");
 			})
 
 
+		})
+	}
+
+	deleteActivity(id) {
+		return new Promise((resolve, reject) => {
+			if (!this.isSignedIn) {
+				//Must be signed in
+				reject("You are not signed in!");
+				return;
+			}
+
+			if (!id) {
+				reject("No provided ID")
+				return;
+			}
+
+			//Update to activity collection
+			this._activityRef.doc(id).delete().then(() => {
+				// Done
+				resolve();
+			}).catch((err) => {
+				console.log(err);
+				reject("Error deleting activity!");
+			})
 		})
 	}
 
@@ -686,6 +705,15 @@ rhit.ReviewPageController = class {
 
 					reviewManager.update(this.reviewValue, reviewText).then(() => {
 						window.location.href = `./activity.html?id=${review.activityID}`
+					}).catch((err) => {
+						alert(err)
+					})
+				}
+
+				document.getElementById("delete-modal-button").style.display = ""
+				document.getElementById("delete-button").onclick = () => {
+					reviewManager.delete().then(() => {
+						window.location.href = "./profile.html"
 					}).catch((err) => {
 						alert(err)
 					})
@@ -817,22 +845,30 @@ rhit.CreatePageController = class {
 					return;
 				}
 				document.getElementById("new-activity-name-field").value = activity[rhit.FB_KEY_ACTIVITY];
+				document.getElementById("new-activity-name-field").disabled = true;
 				document.getElementById("type-select").value = activity[rhit.FB_KEY_TYPE]
 				document.getElementById("access-select").value = activity[rhit.FB_KEY_AVAILABILITY]
 				document.getElementById("duration-select").value = activity[rhit.FB_KEY_DURATION]
 				document.getElementById("participant-input").value = activity[rhit.FB_KEY_PARTICPANTS]
 
 				document.getElementById("create-button").onclick = (event) => {
-					const name = document.getElementById("new-activity-name-field").value;
 					const type = document.getElementById("type-select").value;
 					const participants = parseInt(document.getElementById("participant-input").value);
 					const access = document.getElementById("access-select").value;
 					const duration = document.getElementById("duration-select").value;
 
-					rhit.fbProfileManager.updateActivity(id, name, type, access, participants, duration).then((docRef) => {
+					rhit.fbProfileManager.updateActivity(id, type, access, participants, duration).then((docRef) => {
 						window.location.href = `./activity.html?id=${id}`;
 					}).catch((err) => {
 						alert(err);
+					})
+				}
+				document.getElementById("delete-modal-button").style.display = ""
+				document.getElementById("delete-button").onclick = (event) => {
+					rhit.fbProfileManager.deleteActivity(id).then(() => {
+						window.location.href = "./profile.html"
+					}).catch((err) => {
+						alert(err)
 					})
 				}
 			}).catch((err) => {
@@ -1008,7 +1044,7 @@ rhit.ProfilePageController = class {
 				<span class="fa fa-star ${created.rating >= 1 ? "checked" : ""}"></span>
 			</div>
 			<div class="col-5 col-md-2">
-				<a type="button" class="btn btn-sm btn-outline-primary" target="_blank" href="./create.html?edit=${created.id}">Edit</a>
+				<a type="button" class="btn btn-sm btn-outline-primary" target="_blank" href="./create.html?edit=${created.id}">Manage</a>
 			</div>
 		</div>
 	</div>`);
@@ -1029,7 +1065,7 @@ rhit.ProfilePageController = class {
 				<span class="fa fa-star ${review.stars >= 5 ? "checked" : ""}"></span>
 			</div>
 			<div class="col-5 col-md-2">
-				<a type="button" class="btn btn-sm btn-outline-primary" target="_blank" href="./review.html?edit=${review.id}">Edit</a>
+				<a type="button" class="btn btn-sm btn-outline-primary" target="_blank" href="./review.html?edit=${review.id}">Manage</a>
 			</div>
 		</div>
 		<div class="row">
@@ -1145,11 +1181,22 @@ rhit.FbReviewManager = class {
 						resolve()
 					}).catch((err) => {
 						console.log(err);
-						alert("Error updating your review!")
+						reject("Error updating your review!")
 					})
 				}
 			}).catch((err) => {
 				reject(err)
+			})
+		})
+	}
+
+	delete() {
+		return new Promise((resolve, reject) => {
+			this._reviewRef.delete().then(() => {
+				resolve()
+			}).catch((err) => {
+				console.log(err);
+				reject("Error deleting this review")
 			})
 		})
 	}
