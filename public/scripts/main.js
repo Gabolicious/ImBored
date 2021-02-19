@@ -690,6 +690,9 @@ rhit.ReviewPageController = class {
 						alert(err)
 					})
 				}
+			}).catch((err) => {
+				alert(err)
+				window.location.href = "./"
 			})
 		}
 
@@ -787,6 +790,7 @@ rhit.CreatePageController = class {
 			//if user isn't signed in
 			alert("You must be signed in to create an activity");
 			window.location.href = "./";
+			return;
 		}
 		if (!id) {
 			//Handle create click
@@ -833,6 +837,7 @@ rhit.CreatePageController = class {
 				}
 			}).catch((err) => {
 				alert(err)
+				window.location.href = "./"
 			})
 
 
@@ -859,6 +864,7 @@ rhit.ProfilePageController = class {
 				})
 			}
 		} else {
+			alert("You must be signed in to view your profile.")
 			window.location.href = "./";
 			return;
 		}
@@ -1037,6 +1043,7 @@ rhit.LoginPageController = class {
 	constructor() {
 		if (rhit.fbProfileManager.isSignedIn) {
 			// user cannot login while being logged in
+			alert("You are already signed in.")
 			window.location.href = "./index.html";
 			return;
 		}
@@ -1191,6 +1198,7 @@ rhit.FbReviewManager = class {
 
 rhit.FbActivityManager = class {
 	constructor(id) {
+		if (!id) return;
 		this.id = id; //save the ID
 		this._documentSnapshot = {}; //save document snapshot
 		this._reviews = []; //save reviews
@@ -1333,26 +1341,35 @@ rhit.FbActivityManager = class {
 
 	// get the activity
 	get activity() {
+		if (!this._documentSnapshot) return "";
 		return this._documentSnapshot.get(rhit.FB_KEY_ACTIVITY);
 	}
 
 	// Get the activity type
 	get type() {
+		if (!this._documentSnapshot) return "";
+
 		return this._documentSnapshot.get(rhit.FB_KEY_TYPE);
 	}
 
 	// Get the activity participants
 	get participants() {
+		if (!this._documentSnapshot) return "";
+
 		return this._documentSnapshot.get(rhit.FB_KEY_PARTICPANTS);
 	}
 
 	// get the activities availability
 	get availability() {
+		if (!this._documentSnapshot) return "";
+
 		return this._documentSnapshot.get(rhit.FB_KEY_AVAILABILITY);
 	}
 
 	// Get the activities duration
 	get duration() {
+		if (!this._documentSnapshot) return "";
+
 		return this._documentSnapshot.get(rhit.FB_KEY_DURATION);
 	}
 
@@ -1383,6 +1400,11 @@ rhit.FbActivityManager = class {
 
 rhit.ActivityPageController = class {
 	constructor() {
+		if (!rhit.fbActivityManager.id) {
+			alert("No provided activity ID")
+			window.location.href = "./"
+			return;
+		}
 		if (rhit.fbProfileManager.isSignedIn) {
 			//hide login button and enable logout button
 			document.getElementById("login-button").style.display = "none";
@@ -1420,6 +1442,11 @@ rhit.ActivityPageController = class {
 
 	// Update activity
 	updateView() {
+		if (!rhit.fbActivityManager.activity) {
+			alert("Invalid activity.")
+			window.location.href = "./"
+			return;
+		}
 		document.getElementById("activity-title").innerHTML = rhit.fbActivityManager.activity;
 		document.getElementById("type").innerHTML = `Type: ${rhit.fbActivityManager.type}`;
 		document.getElementById("participants").innerHTML = `Participants: ${rhit.fbActivityManager.participants}`;
