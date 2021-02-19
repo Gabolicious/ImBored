@@ -1043,7 +1043,6 @@ rhit.LoginPageController = class {
 	constructor() {
 		if (rhit.fbProfileManager.isSignedIn) {
 			// user cannot login while being logged in
-			alert("You are already signed in.")
 			window.location.href = "./index.html";
 			return;
 		}
